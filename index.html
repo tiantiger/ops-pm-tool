@@ -1380,7 +1380,7 @@
     function ghWrite(projects) {
         if (_ghWriting) return Promise.resolve();
         _ghWriting = true;
-        var content = Buffer.from(JSON.stringify(projects), 'utf8').toString('base64');
+        var content = btoa(unescape(encodeURIComponent(JSON.stringify(projects))));
         return ghRead().then(function() {
             var payload = { message: 'Update [' + new Date().toLocaleString('zh-CN') + ']', content: content, sha: _ghSHA, branch: _GH_BRANCH };
             return fetch(_GH_API, { method: 'PUT', headers: _GH_HEADERS, body: JSON.stringify(payload) });
