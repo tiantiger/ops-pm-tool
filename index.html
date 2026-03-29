@@ -1038,8 +1038,7 @@
             text-align: center;
         }
     </style>
-    <script src="config.js"></script>
-</head>
+    </head>
 <body>
     <div class="container" id="capture-area">
         <div class="header">
@@ -1321,9 +1320,10 @@
 
     <div class="toast" id="toast"></div>
 
+<script>
     // ====== GitHub 配置（部署前必须替换）======
 const GITHUB_CONFIG = {
-    token: (typeof window.GITHUB_TOKEN !== 'undefined') ? window.GITHUB_TOKEN : '',
+    token: localStorage.getItem('gh_token') || '',
     owner:  'tiantiger',
     repo:   'ops-pm-tool',
     branch: 'main',
@@ -1350,7 +1350,7 @@ class GithubDB {
     }
 
     isConfigured() {
-        return this.config.token && this.config.token !== 'YOUR_GITHUB_TOKEN';
+        return localStorage.getItem('gh_token') && localStorage.getItem('gh_token').length > 10;
     }
 
     async init(onReady) {
@@ -1488,9 +1488,7 @@ class ProjectManager {
     }
 
     init() {
-        if (!this.db.isConfigured()) {
-            this.showSetupGuide();
-        } else {
+        if (localStorage.getItem('gh_token')) {
             document.getElementById('active-projects').innerHTML =
                 '<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text">正在从 GitHub 加载数据...</div></div>';
             document.getElementById('connection-status').innerHTML = '<span class="status-dot syncing"></span> 连接中...';
@@ -1513,6 +1511,8 @@ class ProjectManager {
                 this.render();
                 this.updateConnectionStatus(true);
             };
+        } else {
+            this.showSetupGuide();
         }
 
         this.initImageResize();
@@ -1912,6 +1912,7 @@ branch: 'main'</code>
 
 const app = new ProjectManager();
 document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active')); });
+</script>
 
 </body>
 </html>
