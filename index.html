@@ -964,80 +964,7 @@
             line-height: 1.8;
         }
 
-        /* 恢复选项样式 */
-        .restore-options {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .restore-option {
-            display: flex;
-            align-items: center;
-            padding: 16px;
-            background: var(--bg-secondary);
-            border: 2px solid var(--border);
-            border-radius: var(--radius-md);
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .restore-option:hover {
-            border-color: var(--primary);
-            background: var(--bg-primary);
-        }
-
-        .restore-option input[type="radio"] {
-            margin-right: 12px;
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-
-        .restore-option-label {
-            flex: 1;
-            cursor: pointer;
-        }
-
-        .restore-option-title {
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 2px;
-        }
-
-        .restore-option-desc {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .restore-option-status {
-            font-size: 12px;
-            padding: 4px 10px;
-            border-radius: 12px;
-            background: var(--bg-card);
-            color: var(--text-secondary);
-        }
-
-        .restore-option-status.available {
-            background: var(--success);
-            color: white;
-        }
-
-        .restore-option-status.unavailable {
-            background: var(--bg-card);
-            color: var(--text-secondary);
-        }
-
-        .backup-info {
-            background: var(--bg-secondary);
-            padding: 12px;
-            border-radius: var(--radius-md);
-            margin-bottom: 20px;
-            font-size: 13px;
-            color: var(--text-secondary);
-            text-align: center;
-        }
-    </style>
+        </style>
     </head>
 <body>
     <div class="container" id="capture-area">
@@ -1048,9 +975,7 @@
                     <div class="header-subtitle">团队协作版 · GitHub 云同步</div>
                 </div>
                 <div class="header-actions">
-                    <button class="btn btn-warning" onclick="app.openRestoreModal()">
-                        <span>⏰</span> 恢复内容
-                    </button>
+                    
                     <button class="btn btn-info" onclick="app.exportExcel()">
                         <span>📊</span> 导出Excel
                     </button>
@@ -1235,57 +1160,6 @@
     </div>
 
     <!-- 进展详情弹窗 -->
-    <div class="modal-overlay" id="progress-detail-modal">
-        <div class="modal" style="max-width: 600px;">
-            <div class="modal-header">
-                <h3 class="modal-title" id="progress-detail-title">进展详情</h3>
-                <button class="modal-close" onclick="app.closeModal('progress-detail-modal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="progress-detail-content" id="progress-detail-content"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="app.closeModal('progress-detail-modal')">关闭</button>
-            </div>
-        </div>
-    </div>
-
-    
-                        <span class="restore-option-status" id="status-5min">检查中...</span>
-                    </label>
-                    
-                    <label class="restore-option">
-                        <input type="radio" name="restore-time" value="1hour" id="restore-1hour">
-                        <div class="restore-option-label">
-                            <div class="restore-option-title">1小时前</div>
-                            <div class="restore-option-desc">恢复到1小时前的完整备份</div>
-                        </div>
-                        <span class="restore-option-status" id="status-1hour">检查中...</span>
-                    </label>
-                    
-                    <label class="restore-option">
-                        <input type="radio" name="restore-time" value="6hour" id="restore-6hour">
-                        <div class="restore-option-label">
-                            <div class="restore-option-title">6小时前</div>
-                            <div class="restore-option-desc">恢复到6小时前的完整备份</div>
-                        </div>
-                        <span class="restore-option-status" id="status-6hour">检查中...</span>
-                    </label>
-                </div>
-                
-                <div style="margin-top: 20px; padding: 12px; background: rgba(212, 196, 168, 0.1); border-radius: 8px; font-size: 12px; color: var(--text-secondary);">
-                    💡 提示：系统每5分钟自动创建快照，恢复操作将覆盖当前所有数据，请谨慎操作。
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="app.closeModal('restore-modal')">取消</button>
-                <button class="btn btn-warning" onclick="app.confirmRestore()">确认恢复</button>
-            </div>
-        </div>
-    </div>
-
-    
-    </div>
 
     <!-- 详情查看弹窗 -->
     <div class="modal-overlay" id="detail-modal">
@@ -1378,7 +1252,7 @@ class GithubDB {
         const json = await res.json();
         this.sha = json.sha;
         try {
-            this.data = JSON.parse(atob(json.content));
+            const raw = decodeURIComponent(escape(atob(json.content))); this.data = JSON.parse(raw);
             if (!this.data.projects) this.data.projects = {};
         } catch { this.data = { projects: {} }; }
         return this.data;
@@ -1512,7 +1386,7 @@ class ProjectManager {
                 this.updateConnectionStatus(true);
             };
         } else {
-            this.showSetupGuide();
+            this.promptForToken();
         }
 
         this.initImageResize();
@@ -1548,6 +1422,68 @@ class ProjectManager {
             el.innerHTML = '<span class="status-dot offline"></span> 未连接';
             el.className = 'connection-status disconnected';
         }
+    }
+
+    promptForToken() {
+        const saved = localStorage.getItem('gh_token') || '';
+        document.getElementById('active-projects').innerHTML = \`
+        <div style="background:var(--bg-card);border-radius:var(--radius-lg);padding:40px;max-width:500px;margin:0 auto;box-shadow:0 2px 12px var(--shadow);border:1px solid var(--border);text-align:center">
+            <div style="font-size:48px;margin-bottom:16px">🔐</div>
+            <h2 style="font-size:20px;margin-bottom:12px">请输入访问密码</h2>
+            <p style="color:var(--text-secondary);margin-bottom:24px;line-height:1.8">首次使用需要输入 Token 以连接数据。<br>向团队管理员获取 Token 即可。</p>
+            <input type="password" id="token-input" placeholder="粘贴 Token 到这里..." style="width:100%;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-secondary);color:var(--text-primary);font-size:14px;outline:none;margin-bottom:16px;font-family:monospace">
+            <button class="btn btn-primary" style="width:100%;justify-content:center;padding:14px" onclick="app.submitToken()">确认连接</button>
+        </div>\`;
+        // Auto-focus the input
+        setTimeout(() => {
+            const input = document.getElementById('token-input');
+            if (input) {
+                input.focus();
+                input.addEventListener('keydown', e => { if (e.key === 'Enter') app.submitToken(); });
+            }
+        }, 100);
+    }
+
+    async submitToken() {
+        const input = document.getElementById('token-input');
+        const token = input ? input.value.trim() : '';
+        if (!token || token.length < 10) { this.showToast('请输入有效的 Token'); return; }
+        
+        // Test the token
+        try {
+            const res = await fetch('https://api.github.com/user', {
+                headers: { 'Authorization': 'token ' + token }
+            });
+            if (!res.ok) { this.showToast('Token 无效，请检查'); return; }
+            localStorage.setItem('gh_token', token);
+            this.showToast('✅ Token 验证成功，正在加载...');
+            // Reinitialize
+            this.db.config.token = token;
+            this.db.headers['Authorization'] = 'token ' + token;
+            
+            document.getElementById('active-projects').innerHTML =
+                '<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text">正在加载数据...</div></div>';
+            document.getElementById('connection-status').innerHTML = '<span class="status-dot syncing"></span> 连接中...';
+            
+            this.db.init((ok, errMsg) => {
+                if (ok) {
+                    this.projects = Object.values(this.db.data.projects);
+                    this.updateConnectionStatus(true);
+                    this.render();
+                    this.tryMigrate();
+                } else {
+                    this.updateConnectionStatus(false);
+                    localStorage.removeItem('gh_token');
+                    document.getElementById('active-projects').innerHTML =
+                        '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">连接失败：' + errMsg + '<br><br><button class="btn btn-secondary" onclick="app.promptForToken()">重新输入 Token</button></div></div>';
+                }
+            });
+            this.db.onUpdate = (data) => {
+                this.projects = Object.values(data.projects || {});
+                this.render();
+                this.updateConnectionStatus(true);
+            };
+        } catch(e) { this.showToast('验证失败：' + e.message); }
     }
 
     showSetupGuide() {
