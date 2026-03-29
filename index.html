@@ -1382,7 +1382,8 @@
         _ghWriting = true;
         var content = btoa(unescape(encodeURIComponent(JSON.stringify(projects))));
         return ghRead().then(function() {
-            var payload = { message: 'Update [' + new Date().toLocaleString('zh-CN') + ']', content: content, sha: _ghSHA, branch: _GH_BRANCH };
+            var payload = { message: 'Update [' + new Date().toLocaleString('zh-CN') + ']', content: content, branch: _GH_BRANCH };
+            if (_ghSHA) payload.sha = _ghSHA;
             return fetch(_GH_API, { method: 'PUT', headers: _GH_HEADERS, body: JSON.stringify(payload) });
         }).then(function(r) {
             if (!r.ok && r.status === 409) {
@@ -1403,15 +1404,21 @@
     function ghStartPoll() {
         if (_ghPollTimer) clearInterval(_ghPollTimer);
         _ghPollTimer = setInterval(function() {
+            if (_ghWriting) return; // skip poll during write
             ghRead().then(function(data) {
                 if (data && app && app.projects) {
-                    var json1 = JSON.stringify(app.projects.sort(function(a,b){return a.createdAt-b.createdAt}));
-                    var json2 = JSON.stringify(data.sort(function(a,b){return a.createdAt-b.createdAt}));
-                    if (json1 !== json2) {
-                        app.projects = data;
-                        app.render();
-                        updateConnectionStatus(true);
+                    // Only sync if remote has MORE projects than local (remote is newer)
+                    if (data.length >= app.projects.length) {
+                        var json1 = JSON.stringify(app.projects.sort(function(a,b){return a.createdAt-b.createdAt}));
+                        var json2 = JSON.stringify(data.sort(function(a,b){return a.createdAt-b.createdAt}));
+                        if (json1 !== json2) {
+                            app.projects = data;
+                            app.render();
+                        }
                     }
+                    updateConnectionStatus(true);
+                }
+            }).catch(function() {});
                 }
             }).catch(function() {});
         }, 15000);
