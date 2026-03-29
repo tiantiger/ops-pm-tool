@@ -1033,6 +1033,40 @@
             color: var(--text-secondary);
             text-align: center;
         }
+    
+        /* ====== 项目详情 - 表单风格 ====== */
+        .detail-form { padding: 0; }
+        .detail-form-group { display: flex; padding: 14px 0; border-bottom: 1px solid var(--border); }
+        .detail-form-group:last-child { border-bottom: none; }
+        .detail-form-label { width: 90px; flex-shrink: 0; font-size: 13px; color: var(--text-secondary); line-height: 28px; font-weight: 500; }
+        .detail-form-value { flex: 1; font-size: 14px; color: var(--text-primary); line-height: 28px; word-break: break-word; }
+        .detail-form-value.status-badge { display: inline-block; padding: 2px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .detail-form-value.status-badge.pending { background: #FFF3E0; color: #E65100; }
+        .detail-form-value.status-badge.progress { background: #E3F2FD; color: #1565C0; }
+        .detail-form-value.status-badge.done { background: #E8F5E9; color: #2E7D32; }
+        .detail-progress-bar-wrap { flex: 1; display: flex; align-items: center; gap: 12px; }
+        .detail-progress-bar { flex: 1; height: 8px; background: var(--bg-secondary); border-radius: 4px; overflow: hidden; }
+        .detail-progress-bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%); transition: width 0.3s; }
+        .detail-progress-pct { font-size: 14px; font-weight: 600; color: var(--primary); min-width: 36px; text-align: right; }
+        .detail-desc { width: 100%; padding: 12px 16px; background: var(--bg-secondary); border-radius: 8px; font-size: 13px; color: var(--text-secondary); line-height: 1.7; white-space: pre-wrap; }
+        .detail-section-card { margin-top: 20px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+        .detail-section-header { padding: 12px 16px; background: var(--bg-secondary); font-size: 13px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; }
+        .detail-section-body { padding: 12px 16px; }
+        .detail-milestone-row { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(0,0,0,0.04); gap: 12px; }
+        .detail-milestone-row:last-child { border-bottom: none; }
+        .detail-milestone-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--text-primary); }
+        .detail-milestone-bar { width: 80px; height: 4px; background: var(--bg-secondary); border-radius: 2px; overflow: hidden; }
+        .detail-milestone-bar-fill { height: 100%; border-radius: 2px; }
+        .detail-milestone-pct { font-size: 12px; color: var(--text-secondary); min-width: 30px; text-align: right; }
+        .detail-milestone-status { font-size: 11px; padding: 1px 8px; border-radius: 8px; font-weight: 500; }
+        .detail-progress-row { padding: 14px 0; border-bottom: 1px solid rgba(0,0,0,0.04); }
+        .detail-progress-row:last-child { border-bottom: none; }
+        .detail-progress-row-title { font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px; }
+        .detail-progress-row-time { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+        .detail-progress-row-body { font-size: 13px; color: var(--text-primary); line-height: 1.7; padding: 10px 14px; background: var(--bg-secondary); border-radius: 6px; word-break: break-word; }
+        .detail-progress-row-body img { max-width: 100%; border-radius: 4px; }
+        .detail-empty { text-align: center; color: var(--text-secondary); font-size: 13px; padding: 24px 0; }
+
     </style>
 </head>
 <body>
@@ -1320,9 +1354,9 @@
 
     <!-- 详情查看弹窗 -->
     <div class="modal-overlay" id="detail-modal">
-        <div class="modal" style="max-width: 800px;">
+        <div class="modal" style="max-width: 720px;">
             <div class="modal-header">
-                <h3 class="modal-title">项目详情</h3>
+                <h3 class="modal-title">📋 项目详情</h3>
                 <button class="modal-close" onclick="app.closeModal('detail-modal')">&times;</button>
             </div>
             <div class="modal-body detail-content" id="detail-content"></div>
@@ -2095,57 +2129,43 @@
             viewDetails(id) {
                 const project = this.projects.find(p => p.id === id);
                 if (!project) return;
-                
-                let milestonesHtml = '';
-                if (project.milestones?.length > 0) {
-                    milestonesHtml = `<div class="detail-section"><div class="detail-section-title">里程碑 (${project.milestones.length}个)</div>
-                        ${project.milestones.map(m => `
-                            <div style="background: #FAF7F0; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
-                                <strong>${m.name}</strong> - ${m.status} (${m.progress}%)
-                                <div style="font-size: 13px; color: #8B8680;">${m.startDate} 至 ${m.endDate}</div>
-                            </div>
-                        `).join('')}
-                    </div>`;
-                }
-                
-                let progressHtml = '';
-                if (project.progressRecords?.length > 0) {
-                    const sorted = [...project.progressRecords].sort((a, b) => b.createdAt - a.createdAt);
-                    progressHtml = `<div class="detail-section"><div class="detail-section-title">进展记录 (${project.progressRecords.length}条)</div>
-                        ${sorted.map(p => `
-                            <div style="background: #FAF7F0; padding: 16px; border-radius: 8px; margin-bottom: 8px;">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <strong>${p.title}</strong>
-                                    <span style="font-size: 12px; color: #8B8680;">${new Date(p.createdAt).toLocaleString('zh-CN')}</span>
-                                </div>
-                                <div>${p.content}</div>
-                            </div>
-                        `).join('')}
-                    </div>`;
-                }
-                
-                document.getElementById('detail-content').innerHTML = `
-                    <div class="detail-grid">
-                        <div class="detail-item">
-                            <div class="detail-label">项目名称</div>
-                            <div class="detail-value">${project.name}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">负责人</div>
-                            <div class="detail-value">${project.owner || '未指定'}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">项目状态</div>
-                            <div class="detail-value">${project.status}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">项目进度</div>
-                            <div class="detail-value">${project.projectProgress || 0}%</div>
-                        </div>
-                    </div>
-                    ${milestonesHtml}
-                    ${progressHtml}
-                `;
+
+                const statusMap = { '未启动': 'pending', '进行中': 'progress', '已完成': 'done' };
+                const sc = statusMap[project.status] || 'pending';
+                const msHtml = project.milestones && project.milestones.length > 0
+                    ? project.milestones.map(m => {
+                        const done = m.status === '已完成';
+                        return '<div class="detail-milestone-row">' +
+                            '<div class="detail-milestone-name">' + m.name + '</div>' +
+                            '<div style="font-size:11px;color:var(--text-secondary);min-width:110px">' + m.startDate.slice(5) + ' ~ ' + m.endDate.slice(5) + '</div>' +
+                            '<div class="detail-milestone-bar"><div class="detail-milestone-bar-fill" style="width:' + m.progress + '%;background:' + (done ? '#B8D4C8' : '#E6C9A8') + '"></div></div>' +
+                            '<div class="detail-milestone-pct">' + m.progress + '%</div>' +
+                            '<span class="detail-milestone-status" style="background:' + (done ? '#E8F5E9;color:#2E7D32' : '#FFF3E0;color:#E65100') + '">' + (done ? '已完成' : m.status) + '</span></div>';
+                    }).join('')
+                    : '<div class="detail-empty">暂无里程碑</div>';
+
+                const prHtml = project.progressRecords && project.progressRecords.length > 0
+                    ? [...project.progressRecords].sort((a,b) => b.createdAt - a.createdAt).map(p =>
+                        '<div class="detail-progress-row">' +
+                            '<div class="detail-progress-row-title">' + p.title + '</div>' +
+                            '<div class="detail-progress-row-time">' + new Date(p.createdAt).toLocaleString('zh-CN') + '</div>' +
+                            '<div class="detail-progress-row-body">' + p.content + '</div></div>'
+                    ).join('')
+                    : '<div class="detail-empty">暂无进展记录</div>';
+
+                document.getElementById('detail-content').innerHTML =
+                    '<div class="detail-form">' +
+                        '<div class="detail-form-group"><div class="detail-form-label">项目名称</div><div class="detail-form-value" style="font-size:16px;font-weight:600">' + project.name + '</div></div>' +
+                        '<div class="detail-form-group"><div class="detail-form-label">负责人</div><div class="detail-form-value">' + (project.owner || '未指定') + '</div></div>' +
+                        '<div class="detail-form-group"><div class="detail-form-label">起止时间</div><div class="detail-form-value">' + project.startDate + ' 至 ' + project.endDate + '</div></div>' +
+                        '<div class="detail-form-group"><div class="detail-form-label">项目状态</div><div class="detail-form-value"><span class="status-badge ' + sc + '">' + project.status + '</span></div></div>' +
+                        '<div class="detail-form-group"><div class="detail-form-label">项目进度</div><div class="detail-progress-bar-wrap"><div class="detail-progress-bar"><div class="detail-progress-bar-fill" style="width:' + (project.projectProgress || 0) + '%"></div></div><div class="detail-progress-pct">' + (project.projectProgress || 0) + '%</div></div></div>' +
+                        '<div class="detail-form-group"><div class="detail-form-label">团队成员</div><div class="detail-form-value">' + (project.members || '未指定') + '</div></div>' +
+                        (project.description ? '<div class="detail-form-group" style="flex-direction:column;border-bottom:none"><div class="detail-form-label" style="margin-bottom:8px">项目描述</div><div class="detail-desc">' + project.description + '</div></div>' : '') +
+                    '</div>' +
+                    '<div class="detail-section-card"><div class="detail-section-header">📌 里程碑 (' + (project.milestones ? project.milestones.length : 0) + '个)</div><div class="detail-section-body">' + msHtml + '</div></div>' +
+                    '<div class="detail-section-card"><div class="detail-section-header">📝 进展记录 (' + (project.progressRecords ? project.progressRecords.length : 0) + '条)</div><div class="detail-section-body" style="max-height:40vh;overflow-y:auto">' + prHtml + '</div></div>';
+
                 document.getElementById('detail-modal').classList.add('active');
             }
 
