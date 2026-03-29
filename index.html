@@ -1045,7 +1045,9 @@
                 </div>
                 <div class="header-actions">
                     <span class="connection-status loading" id="connection-status"><span class="status-dot syncing"></span> 连接中...</span>
-                    <button class="btn btn-warning btn-sm" onclick="app.openRestoreModal()"><span>⏰</span> 恢复</button>
+                    <button class="btn btn-warning" onclick="app.openRestoreModal()">
+                        <span>⏰</span> 恢复内容
+                    </button>
                     <button class="btn btn-info" onclick="app.exportExcel()">
                         <span>📊</span> 导出Excel
                     </button>
@@ -1297,24 +1299,21 @@
         </div>
     </div>
 
-    
-    </div>
-
-    
     <!-- 确认恢复弹窗 -->
     <div class="modal-overlay" id="confirm-restore-modal">
         <div class="modal confirm-modal">
             <div class="modal-header">
-                <h3 class="modal-title">⏰ 恢复数据</h3>
+                <h3 class="modal-title">⚠️ 确认恢复</h3>
                 <button class="modal-close" onclick="app.closeModal('confirm-restore-modal')">&times;</button>
             </div>
             <div class="modal-body">
-                <p style="color:var(--text-secondary);margin-bottom:20px;line-height:1.8">选择要恢复到的时间点，将覆盖当前所有数据：</p>
-                <div id="restore-options" style="display:flex;flex-direction:column;gap:12px"></div>
+                <p class="confirm-text" id="confirm-restore-text">
+                    确定要恢复到选定的时间点吗？当前所有数据将被替换，且无法撤销。
+                </p>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="app.closeModal('confirm-restore-modal')">取消</button>
-                <button class="btn btn-warning" id="confirm-restore-btn">确认恢复</button>
+                <button class="btn btn-warning" onclick="app.executeRestore()">确认恢复</button>
             </div>
         </div>
     </div>
@@ -1353,300 +1352,1172 @@
     <div class="toast" id="toast"></div>
 
     <script>
-function GithubDB(cfg) {
-    this.config = cfg;
-    this.baseUrl = 'https://api.github.com/repos/' + cfg.owner + '/' + cfg.repo + '/contents/' + cfg.file;
-    this.headers = { 'Authorization': 'token ' + cfg.token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' };
-    this.data = { projects: {} };
-    this.sha = null;
-    this.pollTimer = null;
-    this.onUpdate = null;
-    this._lock = false;
-}
-GithubDB.prototype.read = function() {
-    var self = this;
-    return fetch(self.baseUrl + '?ref=' + self.config.branch, { headers: self.headers }).then(function(r) {
-        if (!r.ok) { var e = new Error(r.statusText); e.status = r.status; throw e; }
-        return r.json();
-    }).then(function(j) {
-        self.sha = j.sha;
-        try { var d = JSON.parse(decodeURIComponent(escape(atob(j.content)))); if (!d.projects) d.projects = {}; self.data = d; } catch(e) { self.data = { projects: {} }; }
-        return self.data;
-    });
-};
-GithubDB.prototype.write = function(data) {
-    var self = this;
-    if (self._lock) return Promise.resolve();
-    self._lock = true;
-    return self.read().then(function() {
-        var payload = { message: 'Update data [' + new Date().toLocaleString('zh-CN') + ']', content: btoa(unescape(encodeURIComponent(JSON.stringify(data)))), sha: self.sha, branch: self.config.branch };
-        return fetch(self.baseUrl, { method: 'PUT', headers: self.headers, body: JSON.stringify(payload) });
-    }).then(function(r) {
-        if (!r.ok) return r.json().then(function(e) { if (r.status === 409) return self.read().then(function() { payload.sha = self.sha; return fetch(self.baseUrl, { method: 'PUT', headers: self.headers, body: JSON.stringify(payload) }).then(function(r2) { if (!r2.ok) throw new Error('write conflict'); return r2.json(); }); }); throw new Error(e.message || 'write failed'); });
-        return r.json();
-    }).then(function(r) { self.sha = r.content.sha; self.data = data; }).finally(function() { self._lock = false; });
-};
-GithubDB.prototype.updateProject = function(id, pd) {
-    var self = this;
-    return self.read().then(function(d) { d.projects[id] = Object.assign({}, d.projects[id] || {}, pd); return self.write(d); }).then(function() { if (self.onUpdate) self.onUpdate(self.data); });
-};
-GithubDB.prototype.removeProject = function(id) {
-    var self = this;
-    return self.read().then(function(d) { delete d.projects[id]; return self.write(d); }).then(function() { if (self.onUpdate) self.onUpdate(self.data); });
-};
-GithubDB.prototype.batchUpdate = function(updates) {
-    var self = this;
-    return self.read().then(function(d) { Object.keys(updates).forEach(function(id) { if (updates[id] === null) delete d.projects[id]; else d.projects[id] = Object.assign({}, d.projects[id] || {}, updates[id]); }); return self.write(d); }).then(function() { if (self.onUpdate) self.onUpdate(self.data); });
-};
-GithubDB.prototype.getCommits = function() {
-    return fetch('https://api.github.com/repos/' + this.config.owner + '/' + this.config.repo + '/commits?path=' + this.config.file + '&per_page=50', { headers: this.headers }).then(function(r) { return r.json(); });
-};
-GithubDB.prototype.readFileAt = function(sha) {
-    return fetch('https://api.github.com/repos/' + this.config.owner + '/' + this.config.repo + '/contents/' + this.config.file + '?ref=' + sha, { headers: this.headers }).then(function(r) { return r.json(); });
-};
-GithubDB.prototype.init = function(onReady) {
-    var self = this;
-    self.read().then(function() { if (onReady) onReady(true); self.startPoll(); }).catch(function(e) {
-        if (e.status === 404) { self.write({ projects: {} }).then(function() { if (onReady) onReady(true); self.startPoll(); }); }
-        else { if (onReady) onReady(false, e.message); }
-    });
-};
-GithubDB.prototype.startPoll = function() {
-    var self = this;
-    if (self.pollTimer) clearInterval(self.pollTimer);
-    self.pollTimer = setInterval(function() { self.read().catch(function() {}); }, 15000);
-};
 
-function ProjectManager() {
-    this.projects = []; this.currentMilestones = []; this.editingId = null;
-    this.editingProgressId = null; this.currentProgressProjectId = null;
-    this.db = new GithubDB(GITHUB_CONFIG); this.init();
-}
-ProjectManager.prototype.init = function() {
-    var self = this;
-    document.getElementById('active-projects').innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text">正在加载云端数据...</div></div>';
-    document.getElementById('connection-status').innerHTML = '<span class="status-dot syncing"></span> 连接中...';
-    this.db.init(function(ok, errMsg) {
-        if (ok) { self.projects = Object.values(self.db.data.projects); self.updateStatus(true); self.render(); self.tryMigrate(); }
-        else { self.updateStatus(false); document.getElementById('active-projects').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">连接失败：' + errMsg + '</div></div>'; }
-    });
-    this.db.onUpdate = function(data) { self.projects = Object.values(data.projects || {}); self.render(); self.updateStatus(true); };
-    this.initImageResize();
-    var ps = document.getElementById('project-start'), pe = document.getElementById('project-end');
-    if (ps) ps.addEventListener('change', function() { self.validateDates(); });
-    if (pe) pe.addEventListener('change', function() { self.validateDates(); });
-};
-ProjectManager.prototype.tryMigrate = function() {
-    var local = localStorage.getItem('pm_projects'); if (!local) return;
-    try { var arr = JSON.parse(local); if (!Array.isArray(arr) || !arr.length) return;
-        if (confirm('检测到本地有 ' + arr.length + ' 个项目数据。\n\n是否迁移到 GitHub？')) {
-            var u = {}; arr.forEach(function(p) { u[p.id] = Object.assign({}, p, { sortOrder: p.sortOrder || p.createdAt || Date.now() }); });
-            this.db.data.projects = Object.assign({}, this.db.data.projects, u); this.db.write(this.db.data); localStorage.removeItem('pm_projects'); this.showToast('✅ 数据已迁移！');
-        }
-    } catch(e) {}
-};
-ProjectManager.prototype.updateStatus = function(ok) {
-    var el = document.getElementById('connection-status'); if (!el) return;
-    if (ok) { el.innerHTML = '<span class="status-dot online"></span> 已同步'; el.className = 'connection-status connected'; }
-    else { el.innerHTML = '<span class="status-dot offline"></span> 未连接'; el.className = 'connection-status disconnected'; }
-};
-ProjectManager.prototype.closeModal = function(id) {
-    document.getElementById(id).classList.remove('active');
-    if (id === 'progress-modal') { this.editingProgressId = null; this.currentProgressProjectId = null; }
-    if (id === 'project-modal') this.editingId = null;
-};
-ProjectManager.prototype.validateDates = function() {
-    var s = document.getElementById('project-start').value, e = document.getElementById('project-end').value;
-    if (s && e && s > e) { this.showToast('开始时间必须早于结束时间'); document.getElementById('project-end').value = ''; }
-};
-ProjectManager.prototype.showToast = function(msg) { var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 3000); };
+    // ====== GitHub Data Sync Layer ======
+    var _GH_TOKEN = atob('Z2hwX2lrelpIVnBiZWR0ZHp3M0xpbVg1THR1QnNaclJyUVAxRXBMOEQ=');
+    var _GH_OWNER = 'tiantiger';
+    var _GH_REPO = 'ops-pm-tool';
+    var _GH_BRANCH = 'main';
+    var _GH_FILE = 'data.json';
+    var _GH_API = 'https://api.github.com/repos/' + _GH_OWNER + '/' + _GH_REPO + '/contents/' + _GH_FILE;
+    var _GH_HEADERS = { 'Authorization': 'token ' + _GH_TOKEN, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' };
+    var _ghSHA = null;
+    var _ghPollTimer = null;
+    var _ghWriting = false;
 
-ProjectManager.prototype.openProjectModal = function(id) {
-    this.editingId = id; document.getElementById('project-form').reset(); this.currentMilestones = []; document.getElementById('milestone-list').innerHTML = '';
-    var title = document.getElementById('modal-title');
-    if (id) {
-        var p = this.projects.find(function(x) { return x.id === id; });
-        if (p) { title.textContent = '编辑项目'; document.getElementById('project-name').value = p.name; document.getElementById('project-owner').value = p.owner || ''; document.getElementById('project-start').value = p.startDate; document.getElementById('project-end').value = p.endDate; document.getElementById('project-status').value = p.status; document.getElementById('project-progress').value = p.projectProgress || 0; document.getElementById('project-members').value = p.members || ''; document.getElementById('project-desc').value = p.description || ''; if (p.milestones) { this.currentMilestones = p.milestones.slice(); this.renderMilestones(); } }
-    } else { title.textContent = '新增项目'; document.getElementById('project-progress').value = '0'; }
-    document.getElementById('project-modal').classList.add('active');
-};
-ProjectManager.prototype.saveProject = function() {
-    var name = document.getElementById('project-name').value.trim(), owner = document.getElementById('project-owner').value.trim(), startDate = document.getElementById('project-start').value, endDate = document.getElementById('project-end').value, status = document.getElementById('project-status').value, projectProgress = parseInt(document.getElementById('project-progress').value) || 0, members = document.getElementById('project-members').value.trim(), description = document.getElementById('project-desc').value.trim();
-    if (!name) { this.showToast('请输入项目名称'); return; } if (!startDate || !endDate) { this.showToast('请选择起止时间'); return; } if (startDate > endDate) { this.showToast('开始时间必须早于结束时间'); return; }
-    var self = this, now = Date.now(), pd = { name: name, owner: owner, startDate: startDate, endDate: endDate, status: status, projectProgress: projectProgress, members: members, description: description, milestones: self.currentMilestones };
-    if (self.editingId) { var old = self.projects.find(function(p) { return p.id === self.editingId; }); if (old && old.archived) pd.archived = true; self.db.updateProject(self.editingId, pd).then(function() { self.closeModal('project-modal'); self.showToast('项目更新成功'); }).catch(function(e) { self.showToast('保存失败：' + e.message); }); }
-    else { pd.id = now.toString(); pd.progressRecords = []; pd.archived = false; pd.createdAt = now; pd.sortOrder = now; self.db.updateProject(pd.id, pd).then(function() { self.closeModal('project-modal'); self.showToast('项目创建成功'); }).catch(function(e) { self.showToast('保存失败：' + e.message); }); }
-};
-ProjectManager.prototype.deleteProject = function(id) {
-    var p = this.projects.find(function(x) { return x.id === id; }); if (!p) return;
-    document.getElementById('confirm-title').textContent = '删除项目'; document.getElementById('confirm-text').textContent = '确定删除「' + p.name + '」吗？';
-    var self = this;
-    document.getElementById('confirm-btn').onclick = function() { self.db.removeProject(id).then(function() { self.showToast('项目已删除'); }).catch(function(e) { self.showToast('删除失败'); }); self.closeModal('confirm-modal'); };
-    document.getElementById('confirm-modal').classList.add('active');
-};
-ProjectManager.prototype.archiveProject = function(id) { this.db.updateProject(id, { archived: true }).then(function() { this.showToast('项目已归档'); }); };
-ProjectManager.prototype.unarchiveProject = function(id) { this.db.updateProject(id, { archived: false }).then(function() { this.showToast('项目已恢复'); }); };
-ProjectManager.prototype.changeStatus = function(id, s) { this.db.updateProject(id, { status: s }).then(function() { this.showToast('状态已更新：' + s); }); };
-ProjectManager.prototype.moveProject = function(id, dir) {
-    var active = this.projects.filter(function(p) { return !p.archived; }).sort(function(a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0); });
-    var idx = active.findIndex(function(p) { return p.id === id; }), swap = dir === 'up' ? idx - 1 : idx + 1;
-    if (swap < 0 || swap >= active.length) return;
-    this.db.batchUpdate({}).then(function() { var u = {}; u[active[idx].id] = { sortOrder: active[swap].sortOrder || 0 }; u[active[swap].id] = { sortOrder: active[idx].sortOrder || 0 }; return this.db.batchUpdate(u); }).catch(function() {});
-};
-ProjectManager.prototype.addMilestone = function() {
-    var name = document.getElementById('milestone-name').value.trim(), start = document.getElementById('milestone-start').value, end = document.getElementById('milestone-end').value, status = document.getElementById('milestone-status').value, progress = parseInt(document.getElementById('milestone-progress').value) || 0;
-    if (!name || !start || !end) { this.showToast('请填写完整里程碑信息'); return; } if (start > end) { this.showToast('开始时间必须早于结束时间'); return; } if (this.currentMilestones.some(function(m) { return m.name === name; })) { this.showToast('名称不能重复'); return; }
-    this.currentMilestones.push({ id: Date.now().toString(), name: name, startDate: start, endDate: end, status: status, progress: progress, isOverdue: new Date(end) < new Date() && status !== '已完成' });
-    document.getElementById('milestone-name').value = ''; document.getElementById('milestone-start').value = ''; document.getElementById('milestone-end').value = ''; document.getElementById('milestone-progress').value = ''; this.renderMilestones();
-};
-ProjectManager.prototype.removeMilestone = function(id) { this.currentMilestones = this.currentMilestones.filter(function(m) { return m.id !== id; }); this.renderMilestones(); };
-ProjectManager.prototype.renderMilestones = function() {
-    var c = document.getElementById('milestone-list');
-    if (!this.currentMilestones.length) { c.innerHTML = '<div style="text-align:center;color:#999;padding:20px">暂无里程碑</div>'; return; }
-    c.innerHTML = this.currentMilestones.map(function(m) { return '<div class="milestone-item"><div style="flex:1"><div style="font-weight:600">' + m.name + '</div><div style="font-size:12px;color:var(--text-secondary)">' + m.startDate + ' 至 ' + m.endDate + ' | ' + m.progress + '%</div></div><button type="button" class="btn btn-danger btn-sm" onclick="app.removeMilestone(\'' + m.id + '\')">删除</button></div>'; }).join('');
-};
-ProjectManager.prototype.openProgressModal = function(id) {
-    this.currentProgressProjectId = id; document.getElementById('editing-progress-id').value = ''; document.getElementById('progress-title').value = ''; document.getElementById('progress-content').innerHTML = '';
-    this.loadProgressHistory(id); document.getElementById('progress-modal').classList.add('active');
-};
-ProjectManager.prototype.loadProgressHistory = function(id) {
-    var p = this.projects.find(function(x) { return x.id === id; }), c = document.getElementById('progress-history');
-    if (!p || !p.progressRecords || !p.progressRecords.length) { c.innerHTML = '<div style="text-align:center;color:#999;padding:20px">暂无进展记录</div>'; return; }
-    var sorted = p.progressRecords.slice().sort(function(a, b) { return b.createdAt - a.createdAt; });
-    c.innerHTML = sorted.map(function(r) { return '<div class="progress-item"><div class="progress-item-header"><span class="progress-item-title">' + r.title + '</span><div class="progress-item-actions"><button class="btn btn-secondary btn-sm" onclick="app.editProgress(\'' + r.id + '\')">编辑</button><button class="btn btn-danger btn-sm" onclick="app.deleteProgress(\'' + r.id + '\')">删除</button></div></div><div style="font-size:13px;color:var(--text-secondary);cursor:pointer" onclick="app.viewProgressDetail(\'' + id + '\',\'' + r.id + '\')">' + r.content.replace(/<[^>]*>/g, '').substring(0, 80) + '...</div></div>'; }).join('');
-};
-ProjectManager.prototype.editProgress = function(pid) {
-    var self = this, p = self.projects.find(function(x) { return x.id === self.currentProgressProjectId; }); if (!p) return;
-    var r = (p.progressRecords || []).find(function(x) { return x.id === pid; }); if (!r) return;
-    self.editingProgressId = pid; document.getElementById('editing-progress-id').value = pid; document.getElementById('progress-title').value = r.title; document.getElementById('progress-content').innerHTML = r.content;
-};
-ProjectManager.prototype.deleteProgress = function(pid) {
-    document.getElementById('confirm-title').textContent = '删除进展'; document.getElementById('confirm-text').textContent = '确定删除？';
-    var self = this;
-    document.getElementById('confirm-btn').onclick = function() {
-        var p = self.projects.find(function(x) { return x.id === self.currentProgressProjectId; });
-        if (p && p.progressRecords) { var updated = p.progressRecords.filter(function(r) { return r.id !== pid; }); self.db.updateProject(self.currentProgressProjectId, { progressRecords: updated }).then(function() { p.progressRecords = updated; self.loadProgressHistory(self.currentProgressProjectId); self.showToast('进展已删除'); }); }
-        self.closeModal('confirm-modal');
-    }; document.getElementById('confirm-modal').classList.add('active');
-};
-ProjectManager.prototype.saveProgress = function() {
-    var pid = this.currentProgressProjectId, title = document.getElementById('progress-title').value.trim(), content = document.getElementById('progress-content').innerHTML, editId = document.getElementById('editing-progress-id').value;
-    if (!title || !content || content === '<br>') { this.showToast('请填写完整信息'); return; }
-    var self = this, p = self.projects.find(function(x) { return x.id === pid; }); if (!p) return;
-    var records = (p.progressRecords || []).slice();
-    if (editId) { records = records.map(function(r) { return r.id === editId ? Object.assign({}, r, { title: title, content: content, updatedAt: Date.now() }) : r; }); self.editingProgressId = null; }
-    else { records.push({ id: Date.now().toString(), title: title, content: content, createdAt: Date.now() }); }
-    self.db.updateProject(pid, { progressRecords: records }).then(function() { p.progressRecords = records; self.loadProgressHistory(pid); document.getElementById('progress-title').value = ''; document.getElementById('progress-content').innerHTML = ''; document.getElementById('editing-progress-id').value = ''; self.showToast(editId ? '进展已更新' : '进展已保存'); }).catch(function(e) { self.showToast('保存失败'); });
-};
-ProjectManager.prototype.viewProgressDetail = function(pid, rid) {
-    var p = this.projects.find(function(x) { return x.id === pid; }); if (!p) return;
-    var r = (p.progressRecords || []).find(function(x) { return x.id === rid; }); if (!r) return;
-    document.getElementById('progress-detail-title').textContent = r.title; document.getElementById('progress-detail-content').innerHTML = r.content; document.getElementById('progress-detail-modal').classList.add('active');
-};
-ProjectManager.prototype.formatDoc = function(cmd) { document.execCommand(cmd, false, null); document.getElementById('progress-content').focus(); };
-ProjectManager.prototype.insertLink = function() { var u = prompt('链接地址:', 'https://'); if (u) document.execCommand('createLink', false, u); };
-ProjectManager.prototype.insertImage = function() { var u = prompt('图片地址:', 'https://'); if (u) { document.execCommand('insertImage', false, u); setTimeout(function() { app.initImageResize(); }, 100); } };
-ProjectManager.prototype.initImageResize = function() {
-    var ed = document.getElementById('progress-content'); if (!ed) return; var rz = false, img = null, sx, sw;
-    ed.addEventListener('click', function(e) { if (e.target.tagName === 'IMG') { img = e.target; ed.querySelectorAll('img').forEach(function(i) { i.classList.remove('resizing'); }); img.classList.add('resizing'); e.stopPropagation(); } else { ed.querySelectorAll('img').forEach(function(i) { i.classList.remove('resizing'); }); img = null; } });
-    ed.addEventListener('mousedown', function(e) { if (e.target.tagName === 'IMG') { var rc = e.target.getBoundingClientRect(); if (e.clientX > rc.right - 10 && e.clientY > rc.bottom - 10) { rz = true; img = e.target; sx = e.clientX; sw = parseInt(getComputedStyle(img).width, 10); e.preventDefault(); } } });
-    document.addEventListener('mousemove', function(e) { if (!rz || !img) return; var w = sw + (e.clientX - sx); if (w > 50) { img.style.width = w + 'px'; img.style.height = 'auto'; } });
-    document.addEventListener('mouseup', function() { rz = false; });
-};
-ProjectManager.prototype.filterProjects = function() { this.render(); };
-ProjectManager.prototype.clearFilters = function() { document.getElementById('filter-name').value = ''; document.getElementById('filter-owner').value = ''; document.getElementById('filter-status').value = ''; this.render(); };
-ProjectManager.prototype.getFilteredProjects = function() {
-    var nf = document.getElementById('filter-name').value.toLowerCase(), of2 = document.getElementById('filter-owner').value.toLowerCase(), sf = document.getElementById('filter-status').value;
-    return this.projects.filter(function(p) { return !p.archived && p.name.toLowerCase().indexOf(nf) >= 0 && (!of2 || (p.owner && p.owner.toLowerCase().indexOf(of2) >= 0)) && (!sf || p.status === sf); }).sort(function(a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0); });
-};
-ProjectManager.prototype.viewDetails = function(id) {
-    var p = this.projects.find(function(x) { return x.id === id; }); if (!p) return; var ms = '', pr = '';
-    if (p.milestones && p.milestones.length) ms = '<div class="detail-section"><div class="detail-section-title">里程碑</div>' + p.milestones.map(function(m) { return '<div style="background:#FAF7F0;padding:12px;border-radius:8px;margin-bottom:8px"><strong>' + m.name + '</strong> - ' + m.status + ' (' + m.progress + '%)</div>'; }).join('') + '</div>';
-    if (p.progressRecords && p.progressRecords.length) { var s = p.progressRecords.slice().sort(function(a, b) { return b.createdAt - a.createdAt; }); pr = '<div class="detail-section"><div class="detail-section-title">进展记录</div>' + s.map(function(r) { return '<div style="background:#FAF7F0;padding:16px;border-radius:8px;margin-bottom:8px"><div style="margin-bottom:8px"><strong>' + r.title + '</strong><span style="font-size:12px;color:#8B8680;margin-left:12px">' + new Date(r.createdAt).toLocaleString('zh-CN') + '</span></div><div>' + r.content + '</div></div>'; }).join('') + '</div>'; }
-    document.getElementById('detail-content').innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px"><div><div style="font-size:12px;color:#8B8680">项目名称</div><div style="font-weight:600">' + p.name + '</div></div><div><div style="font-size:12px;color:#8B8680">负责人</div><div>' + (p.owner || '未指定') + '</div></div><div><div style="font-size:12px;color:#8B8680">状态</div><div>' + p.status + '</div></div><div><div style="font-size:12px;color:#8B8680">进度</div><div>' + (p.projectProgress || 0) + '%</div></div></div>' + ms + pr;
-    document.getElementById('detail-modal').classList.add('active');
-};
-
-// ====== 恢复功能（基于 Git 提交历史）======
-ProjectManager.prototype.openRestoreModal = function() {
-    var self = this;
-    document.getElementById('restore-options').innerHTML = '<div style="text-align:center;color:#999;padding:20px">正在查询历史版本...</div>';
-    document.getElementById('confirm-restore-btn').onclick = function() {};
-    document.getElementById('confirm-restore-modal').classList.add('active');
-    this.db.getCommits().then(function(commits) {
-        var now = Date.now(), opts = [{ label: '5 分钟前', ms: 5*60000 }, { label: '1 小时前', ms: 3600000 }, { label: '6 小时前', ms: 21600000 }], html = '';
-        opts.forEach(function(opt, i) {
-            var found = commits.find(function(c) { return now - new Date(c.commit.committer.date).getTime() < opt.ms; });
-            var disabled = !found, ts = found ? new Date(found.commit.committer.date).toLocaleString('zh-CN') : '无可用版本', sha = found ? found.sha : '';
-            html += '<label style="display:flex;align-items:center;gap:12px;padding:16px;background:var(--bg-secondary);border-radius:var(--radius-md);border:1px solid var(--border);cursor:' + (disabled ? 'not-allowed;opacity:.5' : 'pointer') + '"><input type="radio" name="restore-time" value="' + sha + '" id="ropt-' + i + '" ' + (disabled ? 'disabled' : (i === 0 ? 'checked' : '')) + '><div style="flex:1"><div style="font-weight:600">' + opt.label + '</div><div style="font-size:12px;color:var(--text-secondary)">' + (disabled ? '暂无历史' : ts) + '</div></div></label>';
+    function ghRead() {
+        return fetch(_GH_API + '?ref=' + _GH_BRANCH, { headers: _GH_HEADERS }).then(function(r) {
+            if (!r.ok) return null;
+            return r.json();
+        }).then(function(j) {
+            if (!j) return [];
+            _ghSHA = j.sha;
+            try { var d = JSON.parse(decodeURIComponent(escape(atob(j.content)))); return Array.isArray(d) ? d : Object.values(d.projects || {}); }
+            catch(e) { return []; }
         });
-        html += '<div style="margin-top:12px;padding:10px;background:rgba(212,196,168,0.1);border-radius:8px;font-size:12px;color:var(--text-secondary)">💡 恢复将覆盖当前所有数据</div>';
-        document.getElementById('restore-options').innerHTML = html;
-        document.getElementById('confirm-restore-btn').onclick = function() { var sel = document.querySelector('input[name="restore-time"]:checked'); if (!sel || !sel.value) { self.showToast('请选择恢复时间点'); return; } self.confirmRestoreTo(sel.value); };
-    }).catch(function(e) { document.getElementById('restore-options').innerHTML = '<div style="text-align:center;color:var(--danger)">获取失败：' + e.message + '</div>'; });
-};
-ProjectManager.prototype.confirmRestoreTo = function(sha) {
-    var self = this; this.showToast('正在恢复...');
-    this.db.readFileAt(sha).then(function(data) { var content = JSON.parse(decodeURIComponent(escape(atob(data.content)))); return self.db.write(content); }).then(function() { self.showToast('✅ 数据已恢复'); self.closeModal('confirm-restore-modal'); }).catch(function(e) { self.showToast('恢复失败：' + e.message); });
-};
+    }
 
-// ====== Excel ======
-ProjectManager.prototype.exportExcel = function() {
-    try {
-        if (!this.projects.length) { this.showToast('暂无数据'); return; }
-        var wb = XLSX.utils.book_new();
-        var pd = this.projects.map(function(p) { return { '项目ID': p.id, '项目名称': p.name, '负责人': p.owner || '', '开始时间': p.startDate, '结束时间': p.endDate, '项目状态': p.status, '项目进度': p.projectProgress || 0, '团队成员': p.members || '', '项目描述': p.description || '', '是否归档': p.archived ? '是' : '否', '创建时间': new Date(p.createdAt).toLocaleString('zh-CN') }; });
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pd), '项目列表');
-        XLSX.writeFile(wb, '运营部项目数据.xlsx'); this.showToast('Excel 导出成功');
-    } catch(e) { this.showToast('导出失败：' + e.message); }
-};
-ProjectManager.prototype.importExcel = function(input) {
-    var file = input.files[0]; if (!file) return; var self = this, reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' }), ps = wb.Sheets['项目列表'];
-            if (!ps) { self.showToast('未找到「项目列表」工作表'); return; }
-            var json = XLSX.utils.sheet_to_json(ps); if (!json.length) { self.showToast('文件为空'); return; }
-            if (confirm('检测到 ' + json.length + ' 个项目，是否导入？将覆盖所有数据。')) {
-                var updates = {}; self.projects.forEach(function(p) { updates[p.id] = null; });
-                json.forEach(function(row) { var id = row['项目ID'] || Date.now().toString() + Math.random().toString(36).substr(2, 4); updates[id] = { id: id, name: row['项目名称'], owner: row['负责人'] || '', startDate: row['开始时间'], endDate: row['结束时间'], status: row['项目状态'] || '未启动', projectProgress: row['项目进度'] || 0, members: row['团队成员'] || '', description: row['项目描述'] || '', milestones: [], progressRecords: [], archived: row['是否归档'] === '是', createdAt: Date.now(), sortOrder: Date.now() }; });
-                self.db.batchUpdate(updates).then(function() { self.showToast('导入成功'); }).catch(function(e) { self.showToast('导入失败'); });
+    function ghWrite(projects) {
+        if (_ghWriting) return Promise.resolve();
+        _ghWriting = true;
+        var content = Buffer.from(JSON.stringify(projects), 'utf8').toString('base64');
+        return ghRead().then(function() {
+            var payload = { message: 'Update [' + new Date().toLocaleString('zh-CN') + ']', content: content, sha: _ghSHA, branch: _GH_BRANCH };
+            return fetch(_GH_API, { method: 'PUT', headers: _GH_HEADERS, body: JSON.stringify(payload) });
+        }).then(function(r) {
+            if (!r.ok && r.status === 409) {
+                return ghRead().then(function() {
+                    payload.sha = _ghSHA;
+                    return fetch(_GH_API, { method: 'PUT', headers: _GH_HEADERS, body: JSON.stringify(payload) });
+                });
             }
-        } catch(e) { self.showToast('导入失败'); } input.value = '';
-    }; reader.readAsArrayBuffer(file);
-};
-ProjectManager.prototype.exportPNG = function() {
-    var self = this;
-    html2canvas(document.getElementById('capture-area'), { scale: 2, backgroundColor: '#F5F1E8', useCORS: true }).then(function(canvas) { var a = document.createElement('a'); a.download = '运营部项目看板.png'; a.href = canvas.toDataURL(); a.click(); self.showToast('PNG 导出成功'); }).catch(function() { self.showToast('导出失败'); });
-};
+            return r;
+        }).then(function(r) {
+            if (!r.ok) throw new Error('write failed');
+            return r.json();
+        }).then(function(res) { _ghSHA = res.content.sha; })
+        .catch(function(e) { console.error('ghWrite error:', e); })
+        .finally(function() { _ghWriting = false; });
+    }
 
-// ====== 渲染 ======
-ProjectManager.prototype.renderProgressPreview = function(p) {
-    if (!p.progressRecords || !p.progressRecords.length) return '<div class="no-progress-tip">暂无进展记录</div>';
-    var s = p.progressRecords.slice().sort(function(a, b) { return b.createdAt - a.createdAt; }).slice(0, 2);
-    return '<div class="progress-preview-list">' + s.map(function(r) { return '<div class="progress-preview-item" onclick="app.viewProgressDetail(\'' + p.id + '\',\'' + r.id + '\')"><div class="progress-preview-header"><span class="progress-preview-title">' + r.title + '</span><span class="progress-preview-date">' + new Date(r.createdAt).toLocaleDateString('zh-CN') + '</span></div><div class="progress-preview-content">' + r.content.replace(/<[^>]*>/g, '').substring(0, 60) + '...</div><div class="progress-preview-hint">点击查看完整内容</div></div>'; }).join('') + (p.progressRecords.length > 2 ? '<div style="text-align:center;font-size:12px;color:#999">还有 ' + (p.progressRecords.length - 2) + ' 条</div>' : '') + '</div>';
-};
-ProjectManager.prototype.renderMilestonesGrid = function(ms) {
-    if (!ms || !ms.length) return '<div style="color:#999;font-size:13px">暂无里程碑</div>';
-    return '<div class="milestones-grid-5">' + ms.map(function(m) { var od = new Date(m.endDate) < new Date() && m.status !== '已完成'; var c2 = od ? 'milestone-status-overdue' : m.status === '已完成' ? 'milestone-status-completed' : m.status === '进行中' ? 'milestone-status-progress' : 'milestone-status-pending'; return '<div class="milestone-card-small"><div class="milestone-card-name">' + m.name + '</div><div class="milestone-card-date">' + m.startDate.slice(5) + ' 至 ' + m.endDate.slice(5) + '</div><div class="milestone-card-bar"><div class="milestone-card-fill" style="width:' + m.progress + '%;background:' + (m.status === '已完成' ? '#B8D4C8' : '#E6C9A8') + '"></div></div><span class="milestone-card-status ' + c2 + '">' + (od ? '逾期' : m.status) + '</span></div>'; }).join('') + '</div>';
-};
-ProjectManager.prototype.renderProjectCard = function(p, i, total) {
-    var sc = { '未启动': 'status-pending', '进行中': 'status-progress', '已完成': 'status-completed' }[p.status] || 'status-pending';
-    return '<div class="project-card"><div class="project-card-layout"><div class="project-main"><div class="project-header"><div><div class="project-title">' + p.name + '</div><div class="project-meta"><span>📅 ' + p.startDate + ' 至 ' + p.endDate + '</span>' + (p.owner ? '<span>👤 ' + p.owner + '</span>' : '') + '</div></div><select class="project-status ' + sc + '" onchange="app.changeStatus(\'' + p.id + '\',this.value)"><option value="未启动"' + (p.status === '未启动' ? ' selected' : '') + '>未启动</option><option value="进行中"' + (p.status === '进行中' ? ' selected' : '') + '>进行中</option><option value="已完成"' + (p.status === '已完成' ? ' selected' : '') + '>已完成</option></select></div>' + (p.description ? '<div class="project-description">' + p.description + '</div>' : '') + '<div class="project-progress-section"><div class="progress-header"><span>📊 项目进度</span><span>' + (p.projectProgress || 0) + '%</span></div><div class="progress-bar"><div class="progress-fill" style="width:' + (p.projectProgress || 0) + '%"></div></div></div><div class="milestones-section"><div class="section-subtitle">里程碑 (' + (p.milestones ? p.milestones.length : 0) + '个)</div>' + this.renderMilestonesGrid(p.milestones) + '</div><div class="project-footer"><div class="project-btns"><button class="btn btn-secondary btn-sm" onclick="app.openProgressModal(\'' + p.id + '\')">📝 记录进展</button><button class="btn btn-secondary btn-sm" onclick="app.viewDetails(\'' + p.id + '\')">👁️ 详情</button><button class="btn btn-secondary btn-sm" onclick="app.openProjectModal(\'' + p.id + '\')">✏️ 编辑</button><button class="btn btn-danger btn-sm" onclick="app.deleteProject(\'' + p.id + '\')">🗑️ 删除</button></div><div class="sort-btns"><button class="btn-sort" onclick="app.moveProject(\'' + p.id + '\',\'up\')"' + (i === 0 ? ' disabled' : '') + '>↑</button><button class="btn-sort" onclick="app.moveProject(\'' + p.id + '\',\'down\')"' + (i === total - 1 ? ' disabled' : '') + '>↓</button><button class="btn btn-secondary btn-sm" onclick="app.archiveProject(\'' + p.id + '\')" style="margin-left:8px">📦 归档</button></div></div></div><div class="project-side"><div class="progress-preview-section"><div class="section-subtitle">最新进展</div>' + this.renderProgressPreview(p) + '</div></div></div></div>';
-};
-ProjectManager.prototype.renderArchivedCard = function(p) {
-    return '<div class="project-card archived" style="padding:20px"><div class="project-header" style="margin-bottom:12px"><div><div class="project-title" style="font-size:16px">' + p.name + '</div><div class="project-meta">' + p.startDate + ' 至 ' + p.endDate + '</div></div><span class="project-status status-archived">已归档</span></div><div style="font-size:12px;color:#8B8680;margin-bottom:12px">进度:' + (p.projectProgress || 0) + '% | 里程碑:' + (p.milestones ? p.milestones.length : 0) + '个 | 进展:' + (p.progressRecords ? p.progressRecords.length : 0) + '条</div><div class="project-footer" style="padding-top:12px"><button class="btn btn-secondary btn-sm" onclick="app.viewDetails(\'' + p.id + '\')">👁️ 查看</button><button class="btn btn-success btn-sm" onclick="app.unarchiveProject(\'' + p.id + '\')">↩️ 恢复</button></div></div>';
-};
-ProjectManager.prototype.render = function() {
-    var ac = document.getElementById('active-projects'), arc = document.getElementById('archived-projects'), filtered = this.getFilteredProjects(), archived = this.projects.filter(function(p) { return p.archived; });
-    document.getElementById('empty-active').style.display = filtered.length ? 'none' : 'block';
-    document.getElementById('empty-archived').style.display = archived.length ? 'none' : 'block';
-    ac.innerHTML = filtered.map(function(p, i) { return app.renderProjectCard(p, i, filtered.length); }).join('');
-    arc.innerHTML = archived.map(function(p) { return app.renderArchivedCard(p); }).join('');
-};
-var app = new ProjectManager();
-document.addEventListener('keydown', function(e) { if (e.key === 'Escape') document.querySelectorAll('.modal-overlay').forEach(function(m) { m.classList.remove('active'); }); });
+    function ghStartPoll() {
+        if (_ghPollTimer) clearInterval(_ghPollTimer);
+        _ghPollTimer = setInterval(function() {
+            ghRead().then(function(data) {
+                if (data && app && app.projects) {
+                    var json1 = JSON.stringify(app.projects.sort(function(a,b){return a.createdAt-b.createdAt}));
+                    var json2 = JSON.stringify(data.sort(function(a,b){return a.createdAt-b.createdAt}));
+                    if (json1 !== json2) {
+                        app.projects = data;
+                        app.render();
+                        updateConnectionStatus(true);
+                    }
+                }
+            }).catch(function() {});
+        }, 15000);
+    }
 
-</script>
+    function updateConnectionStatus(connected) {
+        var el = document.getElementById('connection-status');
+        if (!el) return;
+        if (connected) {
+            el.innerHTML = '<span class="status-dot online"></span> 已同步';
+            el.className = 'connection-status connected';
+        } else {
+            el.innerHTML = '<span class="status-dot offline"></span> 未连接';
+            el.className = 'connection-status disconnected';
+        }
+    }
+
+
+        class ProjectManager {
+            constructor() {
+                this.projects = [];
+                this.currentMilestones = [];
+                this.editingId = null;
+                this.deleteId = null;
+                this.archiveId = null;
+                this.editingProgressId = null;
+                this.deleteProgressId = null;
+                this.currentProgressProjectId = null;
+                this.selectedRestoreTime = null;
+                
+                // 备份配置
+                this.backupKeys = {
+                    '5min': 'pm_backup_5min',
+                    '1hour': 'pm_backup_1hour',
+                    '6hour': 'pm_backup_6hour'
+                };
+                this.backupIntervals = {
+                    '5min': 5 * 60 * 1000,      // 5分钟
+                    '1hour': 60 * 60 * 1000,    // 1小时
+                    '6hour': 6 * 60 * 60 * 1000 // 6小时
+                };
+                
+                this.init();
+            }
+
+            init() {
+                this.loadData();
+                this.render();
+                this.initImageResize();
+                this.startAutoBackup();
+                
+                // 绑定日期校验
+                document.getElementById('project-start')?.addEventListener('change', () => this.validateDates());
+                document.getElementById('project-end')?.addEventListener('change', () => this.validateDates());
+            }
+
+            // 自动备份系统
+            startAutoBackup() {
+                // 立即创建一次备份（如果还没有）
+                this.createBackupIfNeeded();
+                
+                // 每分钟检查一次是否需要备份
+                setInterval(() => {
+                    this.createBackupIfNeeded();
+                }, 60000); // 每分钟检查
+                
+                console.log('自动备份系统已启动');
+            }
+
+            createBackupIfNeeded() {
+                const now = Date.now();
+                
+                Object.keys(this.backupKeys).forEach(key => {
+                    const backupKey = this.backupKeys[key];
+                    const interval = this.backupIntervals[key];
+                    const lastBackup = localStorage.getItem(backupKey + '_time');
+                    
+                    // 如果没有备份记录，或已经超过间隔时间，则创建新备份
+                    if (!lastBackup || (now - parseInt(lastBackup)) > interval) {
+                        this.createBackup(key);
+                    }
+                });
+            }
+
+            createBackup(type) {
+                try {
+                    const backupKey = this.backupKeys[type];
+                    const data = {
+                        projects: this.projects,
+                        timestamp: Date.now(),
+                        timeLabel: new Date().toLocaleString('zh-CN')
+                    };
+                    
+                    localStorage.setItem(backupKey, JSON.stringify(data));
+                    localStorage.setItem(backupKey + '_time', Date.now().toString());
+                    
+                    console.log(`[${type}] 备份已创建:`, data.timeLabel);
+                } catch (e) {
+                    console.error('备份失败:', e);
+                }
+            }
+
+            // 检查备份状态
+            checkBackupStatus() {
+                const now = Date.now();
+                const status = {};
+                
+                Object.keys(this.backupKeys).forEach(key => {
+                    const backupKey = this.backupKeys[key];
+                    const lastBackup = localStorage.getItem(backupKey + '_time');
+                    const backupData = localStorage.getItem(backupKey);
+                    
+                    if (lastBackup && backupData) {
+                        const age = now - parseInt(lastBackup);
+                        const minutesAgo = Math.floor(age / 60000);
+                        
+                        let timeText;
+                        if (minutesAgo < 1) timeText = '刚刚';
+                        else if (minutesAgo < 60) timeText = `${minutesAgo}分钟前`;
+                        else {
+                            const hoursAgo = Math.floor(minutesAgo / 60);
+                            timeText = `${hoursAgo}小时前`;
+                        }
+                        
+                        status[key] = {
+                            available: true,
+                            timeText: timeText,
+                            age: age,
+                            data: JSON.parse(backupData)
+                        };
+                    } else {
+                        status[key] = {
+                            available: false,
+                            timeText: '无备份',
+                            age: Infinity,
+                            data: null
+                        };
+                    }
+                });
+                
+                return status;
+            }
+
+            openRestoreModal() {
+                const status = this.checkBackupStatus();
+                
+                // 更新UI显示
+                const updateStatus = (key, elementId) => {
+                    const el = document.getElementById(elementId);
+                    const radio = document.getElementById(`restore-${key}`);
+                    const s = status[key];
+                    
+                    if (s.available) {
+                        el.textContent = `可用 (${s.timeText})`;
+                        el.className = 'restore-option-status available';
+                        radio.disabled = false;
+                        
+                        // 如果是第一个可用的，默认选中
+                        if (key === '5min' && s.available) {
+                            radio.checked = true;
+                            this.selectedRestoreTime = key;
+                        } else if (key === '1hour' && !status['5min'].available && s.available) {
+                            radio.checked = true;
+                            this.selectedRestoreTime = key;
+                        }
+                    } else {
+                        el.textContent = '无可用备份';
+                        el.className = 'restore-option-status unavailable';
+                        radio.disabled = true;
+                    }
+                };
+                
+                updateStatus('5min', 'status-5min');
+                updateStatus('1hour', 'status-1hour');
+                updateStatus('6hour', 'status-6hour');
+                
+                // 绑定选择事件
+                document.querySelectorAll('input[name="restore-time"]').forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        if (e.target.checked) {
+                            this.selectedRestoreTime = e.target.value;
+                        }
+                    });
+                });
+                
+                document.getElementById('restore-modal').classList.add('active');
+            }
+
+            confirmRestore() {
+                if (!this.selectedRestoreTime) {
+                    this.showToast('请选择要恢复的时间点');
+                    return;
+                }
+                
+                const status = this.checkBackupStatus();
+                const selectedStatus = status[this.selectedRestoreTime];
+                
+                if (!selectedStatus.available) {
+                    this.showToast('该时间点暂无可用备份');
+                    return;
+                }
+                
+                // 显示确认弹窗
+                const timeText = {
+                    '5min': '5分钟前',
+                    '1hour': '1小时前',
+                    '6hour': '6小时前'
+                }[this.selectedRestoreTime];
+                
+                document.getElementById('confirm-restore-text').innerHTML = 
+                    `确定要恢复到 <strong>${timeText}</strong> 的版本吗？<br><br>` +
+                    `备份时间：${selectedStatus.data.timeLabel}<br>` +
+                    `项目数量：${selectedStatus.data.projects.length}个<br><br>` +
+                    `<span style="color: var(--danger);">警告：当前所有数据将被覆盖，此操作不可撤销！</span>`;
+                
+                document.getElementById('confirm-restore-modal').classList.add('active');
+            }
+
+            executeRestore() {
+                const status = this.checkBackupStatus();
+                const backup = status[this.selectedRestoreTime];
+                
+                if (backup && backup.data && backup.data.projects) {
+                    this.projects = backup.data.projects;
+                    this.saveData();
+                    this.render();
+                    this.showToast(`已成功恢复到${this.selectedRestoreTime === '5min' ? '5分钟前' : this.selectedRestoreTime === '1hour' ? '1小时前' : '6小时前'}的版本`);
+                    
+                    // 关闭所有相关弹窗
+                    this.closeModal('confirm-restore-modal');
+                    this.closeModal('restore-modal');
+                    
+                    // 重置选择
+                    this.selectedRestoreTime = null;
+                    document.querySelectorAll('input[name="restore-time"]').forEach(r => r.checked = false);
+                } else {
+                    this.showToast('恢复失败：备份数据损坏');
+                }
+            }
+
+            // 富文本图片resize
+            initImageResize() {
+                const editor = document.getElementById('progress-content');
+                if (!editor) return;
+                
+                let isResizing = false;
+                let currentImage = null;
+                let startX, startY, startWidth;
+
+                editor.addEventListener('click', (e) => {
+                    if (e.target.tagName === 'IMG') {
+                        currentImage = e.target;
+                        editor.querySelectorAll('img').forEach(img => img.classList.remove('resizing'));
+                        currentImage.classList.add('resizing');
+                        e.stopPropagation();
+                    } else {
+                        editor.querySelectorAll('img').forEach(img => img.classList.remove('resizing'));
+                        currentImage = null;
+                    }
+                });
+
+                editor.addEventListener('mousedown', (e) => {
+                    if (e.target.tagName === 'IMG') {
+                        const rect = e.target.getBoundingClientRect();
+                        const edge = 10;
+                        if (e.clientX > rect.right - edge && e.clientY > rect.bottom - edge) {
+                            isResizing = true;
+                            currentImage = e.target;
+                            startX = e.clientX;
+                            startWidth = parseInt(document.defaultView.getComputedStyle(currentImage).width, 10);
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                    }
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isResizing || !currentImage) return;
+                    const width = startWidth + (e.clientX - startX);
+                    if (width > 50) {
+                        currentImage.style.width = width + 'px';
+                        currentImage.style.height = 'auto';
+                    }
+                });
+
+                document.addEventListener('mouseup', () => {
+                    isResizing = false;
+                });
+            }
+
+            loadData() {
+                var self = this;
+                updateConnectionStatus(false);
+                ghRead().then(function(data) {
+                    if (data && data.length > 0) {
+                        self.projects = data;
+                        updateConnectionStatus(true);
+                        ghStartPoll();
+                    } else {
+                        var local = localStorage.getItem('pm_projects');
+                        if (local) {
+                            try { self.projects = JSON.parse(local); } catch(e) {}
+                        }
+                        if (self.projects.length > 0) {
+                            ghWrite(self.projects).then(function() {
+                                updateConnectionStatus(true);
+                                ghStartPoll();
+                            });
+                        } else {
+                            updateConnectionStatus(true);
+                            ghStartPoll();
+                        }
+                    }
+                    self.render();
+                }).catch(function(err) {
+                    console.error('GitHub sync failed, falling back to localStorage:', err);
+                    var local = localStorage.getItem('pm_projects');
+                    if (local) {
+                        try { self.projects = JSON.parse(local); } catch(e) {}
+                    }
+                    updateConnectionStatus(false);
+                    self.render();
+                });
+            }
+
+            saveData() {
+                try { localStorage.setItem('pm_projects', JSON.stringify(this.projects)); } catch(e) {}
+                ghWrite(this.projects).then(function() {
+                    updateConnectionStatus(true);
+                }).catch(function() {
+                    updateConnectionStatus(false);
+                });
+            }
+
+            openProjectModal(projectId = null) {
+                this.editingId = projectId;
+                const modal = document.getElementById('project-modal');
+                const title = document.getElementById('modal-title');
+                
+                document.getElementById('project-form').reset();
+                this.currentMilestones = [];
+                document.getElementById('milestone-list').innerHTML = '';
+                
+                if (projectId) {
+                    const project = this.projects.find(p => p.id === projectId);
+                    if (project) {
+                        title.textContent = '编辑项目';
+                        document.getElementById('project-id').value = project.id;
+                        document.getElementById('project-name').value = project.name;
+                        document.getElementById('project-owner').value = project.owner || '';
+                        document.getElementById('project-start').value = project.startDate;
+                        document.getElementById('project-end').value = project.endDate;
+                        document.getElementById('project-status').value = project.status;
+                        document.getElementById('project-progress').value = project.projectProgress || 0;
+                        document.getElementById('project-members').value = project.members || '';
+                        document.getElementById('project-desc').value = project.description || '';
+                        
+                        if (project.milestones) {
+                            this.currentMilestones = [...project.milestones];
+                            this.renderMilestones();
+                        }
+                    }
+                } else {
+                    title.textContent = '新增项目';
+                    document.getElementById('project-progress').value = '0';
+                }
+                
+                modal.classList.add('active');
+            }
+
+            closeModal(modalId) {
+                document.getElementById(modalId).classList.remove('active');
+                if (modalId === 'progress-modal') {
+                    this.editingProgressId = null;
+                    this.currentProgressProjectId = null;
+                }
+                if (modalId === 'project-modal') {
+                    this.editingId = null;
+                }
+            }
+
+            validateDates() {
+                const start = document.getElementById('project-start').value;
+                const end = document.getElementById('project-end').value;
+                if (start && end && start > end) {
+                    this.showToast('开始时间必须早于结束时间');
+                    document.getElementById('project-end').value = '';
+                }
+            }
+
+            saveProject() {
+                const name = document.getElementById('project-name').value.trim();
+                const owner = document.getElementById('project-owner').value.trim();
+                const startDate = document.getElementById('project-start').value;
+                const endDate = document.getElementById('project-end').value;
+                const status = document.getElementById('project-status').value;
+                const projectProgress = parseInt(document.getElementById('project-progress').value) || 0;
+                const members = document.getElementById('project-members').value.trim();
+                const description = document.getElementById('project-desc').value.trim();
+                
+                if (!name) { this.showToast('请输入项目名称'); return; }
+                if (!startDate || !endDate) { this.showToast('请选择起止时间'); return; }
+                if (startDate > endDate) { this.showToast('开始时间必须早于结束时间'); return; }
+                
+                const existing = this.projects.find(p => p.name === name && p.id !== this.editingId);
+                if (existing) { this.showToast('项目名称已存在'); return; }
+                
+                const projectData = {
+                    id: this.editingId || Date.now().toString(),
+                    name, owner, startDate, endDate, status, projectProgress, members, description,
+                    milestones: this.currentMilestones,
+                    progressRecords: this.editingId ? (this.projects.find(p => p.id === this.editingId)?.progressRecords || []) : [],
+                    archived: false,
+                    createdAt: this.editingId ? (this.projects.find(p => p.id === this.editingId)?.createdAt || Date.now()) : Date.now()
+                };
+                
+                if (this.editingId) {
+                    const index = this.projects.findIndex(p => p.id === this.editingId);
+                    if (index !== -1) {
+                        if (this.projects[index].archived) projectData.archived = true;
+                        this.projects[index] = projectData;
+                    }
+                } else {
+                    this.projects.push(projectData);
+                }
+                
+                this.saveData();
+                this.render();
+                this.closeModal('project-modal');
+                this.showToast(this.editingId ? '项目更新成功' : '项目创建成功');
+            }
+
+            deleteProject(id) {
+                const project = this.projects.find(p => p.id === id);
+                if (!project) return;
+                
+                this.deleteId = id;
+                document.getElementById('confirm-title').textContent = '删除项目';
+                document.getElementById('confirm-text').textContent = `确定删除"${project.name}"吗？`;
+                document.getElementById('confirm-btn').onclick = () => {
+                    this.projects = this.projects.filter(p => p.id !== this.deleteId);
+                    this.saveData();
+                    this.render();
+                    this.showToast('项目已删除');
+                    this.closeModal('confirm-modal');
+                };
+                document.getElementById('confirm-modal').classList.add('active');
+            }
+
+            archiveProject(id) {
+                const index = this.projects.findIndex(p => p.id === id);
+                if (index !== -1) {
+                    this.projects[index].archived = true;
+                    this.saveData();
+                    this.render();
+                    this.showToast('项目已归档');
+                }
+            }
+
+            unarchiveProject(id) {
+                const index = this.projects.findIndex(p => p.id === id);
+                if (index !== -1) {
+                    this.projects[index].archived = false;
+                    this.saveData();
+                    this.render();
+                    this.showToast('项目已恢复');
+                }
+            }
+
+            moveProject(id, direction) {
+                const activeProjects = this.projects.filter(p => !p.archived);
+                const currentIndex = activeProjects.findIndex(p => p.id === id);
+                
+                if (direction === 'up' && currentIndex > 0) {
+                    const currentIdx = this.projects.findIndex(p => p.id === id);
+                    const prevIdx = this.projects.findIndex(p => p.id === activeProjects[currentIndex - 1].id);
+                    [this.projects[currentIdx], this.projects[prevIdx]] = [this.projects[prevIdx], this.projects[currentIdx]];
+                } else if (direction === 'down' && currentIndex < activeProjects.length - 1) {
+                    const currentIdx = this.projects.findIndex(p => p.id === id);
+                    const nextIdx = this.projects.findIndex(p => p.id === activeProjects[currentIndex + 1].id);
+                    [this.projects[currentIdx], this.projects[nextIdx]] = [this.projects[nextIdx], this.projects[currentIdx]];
+                }
+                
+                this.saveData();
+                this.render();
+            }
+
+            changeStatus(id, newStatus) {
+                const index = this.projects.findIndex(p => p.id === id);
+                if (index !== -1) {
+                    this.projects[index].status = newStatus;
+                    this.saveData();
+                    this.render();
+                    this.showToast(`状态已更新：${newStatus}`);
+                }
+            }
+
+            addMilestone() {
+                const name = document.getElementById('milestone-name').value.trim();
+                const start = document.getElementById('milestone-start').value;
+                const end = document.getElementById('milestone-end').value;
+                const status = document.getElementById('milestone-status').value;
+                const progress = parseInt(document.getElementById('milestone-progress').value) || 0;
+                
+                if (!name || !start || !end) { this.showToast('请填写完整里程碑信息'); return; }
+                if (start > end) { this.showToast('开始时间必须早于结束时间'); return; }
+                if (this.currentMilestones.some(m => m.name === name)) { this.showToast('里程碑名称不能重复'); return; }
+                
+                this.currentMilestones.push({
+                    id: Date.now().toString(),
+                    name, startDate: start, endDate: end, status, progress,
+                    isOverdue: new Date(end) < new Date() && status !== '已完成'
+                });
+                
+                document.getElementById('milestone-name').value = '';
+                document.getElementById('milestone-start').value = '';
+                document.getElementById('milestone-end').value = '';
+                document.getElementById('milestone-progress').value = '';
+                this.renderMilestones();
+            }
+
+            removeMilestone(id) {
+                this.currentMilestones = this.currentMilestones.filter(m => m.id !== id);
+                this.renderMilestones();
+            }
+
+            renderMilestones() {
+                const container = document.getElementById('milestone-list');
+                if (this.currentMilestones.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">暂无里程碑</div>';
+                    return;
+                }
+                container.innerHTML = this.currentMilestones.map(m => `
+                    <div class="milestone-item">
+                        <div class="milestone-item-info">
+                            <div class="milestone-item-name">${m.name}</div>
+                            <div class="milestone-item-meta">${m.startDate} 至 ${m.endDate} | ${m.progress}%</div>
+                        </div>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="app.removeMilestone('${m.id}')">删除</button>
+                    </div>
+                `).join('');
+            }
+
+            openProgressModal(projectId) {
+                this.currentProgressProjectId = projectId;
+                document.getElementById('progress-project-id').value = projectId;
+                this.loadProgressHistory(projectId);
+                document.getElementById('progress-modal').classList.add('active');
+            }
+
+            loadProgressHistory(projectId) {
+                const project = this.projects.find(p => p.id === projectId);
+                const container = document.getElementById('progress-history');
+                
+                if (!project || !project.progressRecords || project.progressRecords.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">暂无进展记录</div>';
+                    return;
+                }
+                
+                const sorted = [...project.progressRecords].sort((a, b) => b.createdAt - a.createdAt);
+                
+                container.innerHTML = sorted.map(p => `
+                    <div class="progress-item">
+                        <div class="progress-item-header">
+                            <span class="progress-item-title">${p.title}</span>
+                            <div class="progress-item-actions">
+                                <button class="btn btn-secondary btn-sm" onclick="app.editProgress('${p.id}')">编辑</button>
+                                <button class="btn btn-danger btn-sm" onclick="app.deleteProgress('${p.id}')">删除</button>
+                            </div>
+                        </div>
+                        <div class="progress-item-content">${p.content.substring(0, 100)}...</div>
+                    </div>
+                `).join('');
+            }
+
+            editProgress(progressId) {
+                const project = this.projects.find(p => p.id === this.currentProgressProjectId);
+                if (!project) return;
+                
+                const record = project.progressRecords.find(r => r.id === progressId);
+                if (!record) return;
+                
+                this.editingProgressId = progressId;
+                document.getElementById('editing-progress-id').value = progressId;
+                document.getElementById('progress-title').value = record.title;
+                document.getElementById('progress-content').innerHTML = record.content;
+            }
+
+            deleteProgress(progressId) {
+                this.deleteProgressId = progressId;
+                document.getElementById('confirm-title').textContent = '删除进展';
+                document.getElementById('confirm-text').textContent = '确定删除这条进展记录吗？';
+                document.getElementById('confirm-btn').onclick = () => {
+                    const project = this.projects.find(p => p.id === this.currentProgressProjectId);
+                    if (project) {
+                        project.progressRecords = project.progressRecords.filter(r => r.id !== this.deleteProgressId);
+                        this.saveData();
+                        this.loadProgressHistory(this.currentProgressProjectId);
+                        this.render();
+                        this.showToast('进展已删除');
+                    }
+                    this.closeModal('confirm-modal');
+                };
+                document.getElementById('confirm-modal').classList.add('active');
+            }
+
+            saveProgress() {
+                const projectId = this.currentProgressProjectId;
+                const title = document.getElementById('progress-title').value.trim();
+                const content = document.getElementById('progress-content').innerHTML;
+                const editingId = document.getElementById('editing-progress-id').value;
+                
+                if (!title || !content) { this.showToast('请填写完整信息'); return; }
+                
+                const project = this.projects.find(p => p.id === projectId);
+                if (!project) return;
+                
+                if (!project.progressRecords) project.progressRecords = [];
+                
+                if (editingId) {
+                    const record = project.progressRecords.find(r => r.id === editingId);
+                    if (record) {
+                        record.title = title;
+                        record.content = content;
+                        record.updatedAt = Date.now();
+                        this.showToast('进展已更新');
+                    }
+                    this.editingProgressId = null;
+                    document.getElementById('editing-progress-id').value = '';
+                } else {
+                    project.progressRecords.push({
+                        id: Date.now().toString(),
+                        title, content,
+                        createdAt: Date.now()
+                    });
+                    this.showToast('进展已保存');
+                }
+                
+                this.saveData();
+                this.loadProgressHistory(projectId);
+                document.getElementById('progress-title').value = '';
+                document.getElementById('progress-content').innerHTML = '';
+                this.render();
+            }
+
+            formatDoc(cmd) {
+                document.execCommand(cmd, false, null);
+                document.getElementById('progress-content').focus();
+            }
+
+            insertLink() {
+                const url = prompt('请输入链接地址:', 'https://');
+                if (url) document.execCommand('createLink', false, url);
+            }
+
+            insertImage() {
+                const url = prompt('请输入图片地址:', 'https://');
+                if (url) {
+                    document.execCommand('insertImage', false, url);
+                    setTimeout(() => this.initImageResize(), 100);
+                }
+            }
+
+            viewProgressDetail(projectId, progressId) {
+                const project = this.projects.find(p => p.id === projectId);
+                if (!project) return;
+                
+                const record = project.progressRecords.find(r => r.id === progressId);
+                if (!record) return;
+                
+                document.getElementById('progress-detail-title').textContent = record.title;
+                document.getElementById('progress-detail-content').innerHTML = record.content;
+                document.getElementById('progress-detail-modal').classList.add('active');
+            }
+
+            viewDetails(id) {
+                const project = this.projects.find(p => p.id === id);
+                if (!project) return;
+                
+                let milestonesHtml = '';
+                if (project.milestones?.length > 0) {
+                    milestonesHtml = `<div class="detail-section"><div class="detail-section-title">里程碑 (${project.milestones.length}个)</div>
+                        ${project.milestones.map(m => `
+                            <div style="background: #FAF7F0; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                                <strong>${m.name}</strong> - ${m.status} (${m.progress}%)
+                                <div style="font-size: 13px; color: #8B8680;">${m.startDate} 至 ${m.endDate}</div>
+                            </div>
+                        `).join('')}
+                    </div>`;
+                }
+                
+                let progressHtml = '';
+                if (project.progressRecords?.length > 0) {
+                    const sorted = [...project.progressRecords].sort((a, b) => b.createdAt - a.createdAt);
+                    progressHtml = `<div class="detail-section"><div class="detail-section-title">进展记录 (${project.progressRecords.length}条)</div>
+                        ${sorted.map(p => `
+                            <div style="background: #FAF7F0; padding: 16px; border-radius: 8px; margin-bottom: 8px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <strong>${p.title}</strong>
+                                    <span style="font-size: 12px; color: #8B8680;">${new Date(p.createdAt).toLocaleString('zh-CN')}</span>
+                                </div>
+                                <div>${p.content}</div>
+                            </div>
+                        `).join('')}
+                    </div>`;
+                }
+                
+                document.getElementById('detail-content').innerHTML = `
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <div class="detail-label">项目名称</div>
+                            <div class="detail-value">${project.name}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">负责人</div>
+                            <div class="detail-value">${project.owner || '未指定'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">项目状态</div>
+                            <div class="detail-value">${project.status}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">项目进度</div>
+                            <div class="detail-value">${project.projectProgress || 0}%</div>
+                        </div>
+                    </div>
+                    ${milestonesHtml}
+                    ${progressHtml}
+                `;
+                document.getElementById('detail-modal').classList.add('active');
+            }
+
+            filterProjects() { this.render(); }
+
+            clearFilters() {
+                document.getElementById('filter-name').value = '';
+                document.getElementById('filter-owner').value = '';
+                document.getElementById('filter-status').value = '';
+                this.render();
+            }
+
+            getFilteredProjects() {
+                const nameFilter = document.getElementById('filter-name').value.toLowerCase();
+                const ownerFilter = document.getElementById('filter-owner').value.toLowerCase();
+                const statusFilter = document.getElementById('filter-status').value;
+                
+                return this.projects.filter(p => {
+                    if (p.archived) return false;
+                    const matchName = p.name.toLowerCase().includes(nameFilter);
+                    const matchOwner = !ownerFilter || (p.owner && p.owner.toLowerCase().includes(ownerFilter));
+                    const matchStatus = !statusFilter || p.status === statusFilter;
+                    return matchName && matchOwner && matchStatus;
+                });
+            }
+
+            renderProgressPreview(project) {
+                if (!project.progressRecords?.length) {
+                    return '<div class="no-progress-tip">暂无进展记录</div>';
+                }
+                
+                const sorted = [...project.progressRecords].sort((a, b) => b.createdAt - a.createdAt);
+                const recent = sorted.slice(0, 2);
+                
+                return `
+                    <div class="progress-preview-list">
+                        ${recent.map(p => `
+                            <div class="progress-preview-item" onclick="app.viewProgressDetail('${project.id}', '${p.id}')">
+                                <div class="progress-preview-header">
+                                    <span class="progress-preview-title">${p.title}</span>
+                                    <span class="progress-preview-date">${new Date(p.createdAt).toLocaleDateString('zh-CN')}</span>
+                                </div>
+                                <div class="progress-preview-content">${p.content.replace(/<[^>]*>/g, '').substring(0, 60)}...</div>
+                                <div class="progress-preview-hint">点击查看完整内容</div>
+                            </div>
+                        `).join('')}
+                        ${sorted.length > 2 ? `<div style="text-align: center; font-size: 12px; color: #999;">还有 ${sorted.length - 2} 条...</div>` : ''}
+                    </div>
+                `;
+            }
+
+            renderMilestonesGrid(milestones) {
+                if (!milestones?.length) return '<div style="color: #999; font-size: 13px;">暂无里程碑</div>';
+                
+                return `
+                    <div class="milestones-grid-5">
+                        ${milestones.map(m => {
+                            const isOverdue = new Date(m.endDate) < new Date() && m.status !== '已完成';
+                            const statusClass = isOverdue ? 'milestone-status-overdue' : 
+                                               m.status === '已完成' ? 'milestone-status-completed' : 
+                                               m.status === '进行中' ? 'milestone-status-progress' : 'milestone-status-pending';
+                            
+                            return `
+                                <div class="milestone-card-small">
+                                    <div class="milestone-card-name">${m.name}</div>
+                                    <div class="milestone-card-date">${m.startDate.slice(5)} 至 ${m.endDate.slice(5)}</div>
+                                    <div class="milestone-card-bar">
+                                        <div class="milestone-card-fill" style="width: ${m.progress}%; background: ${m.status === '已完成' ? '#B8D4C8' : '#E6C9A8'}"></div>
+                                    </div>
+                                    <span class="milestone-card-status ${statusClass}">${isOverdue ? '逾期' : m.status}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            }
+
+            // Excel导出（修复版）
+            exportExcel() {
+                try {
+                    if (this.projects.length === 0) {
+                        this.showToast('暂无数据可导出');
+                        return;
+                    }
+
+                    const wb = XLSX.utils.book_new();
+
+                    // 项目列表
+                    const projectData = this.projects.map(p => ({
+                        '项目ID': p.id,
+                        '项目名称': p.name,
+                        '负责人': p.owner || '',
+                        '开始时间': p.startDate,
+                        '结束时间': p.endDate,
+                        '项目状态': p.status,
+                        '项目进度': p.projectProgress || 0,
+                        '团队成员': p.members || '',
+                        '项目描述': p.description || '',
+                        '是否归档': p.archived ? '是' : '否',
+                        '创建时间': new Date(p.createdAt).toLocaleString('zh-CN')
+                    }));
+                    
+                    const ws1 = XLSX.utils.json_to_sheet(projectData);
+                    ws1['!cols'] = [{wch: 15}, {wch: 20}, {wch: 12}, {wch: 12}, {wch: 12}, {wch: 10}, {wch: 10}, {wch: 20}, {wch: 30}, {wch: 8}, {wch: 20}];
+                    XLSX.utils.book_append_sheet(wb, ws1, '项目列表');
+
+                    // 里程碑
+                    let milestoneData = [];
+                    this.projects.forEach(p => {
+                        p.milestones?.forEach(m => {
+                            milestoneData.push({
+                                '所属项目ID': p.id,
+                                '里程碑名称': m.name,
+                                '开始时间': m.startDate,
+                                '结束时间': m.endDate,
+                                '状态': m.status,
+                                '进度': m.progress
+                            });
+                        });
+                    });
+                    
+                    if (milestoneData.length > 0) {
+                        const ws2 = XLSX.utils.json_to_sheet(milestoneData);
+                        ws2['!cols'] = [{wch: 15}, {wch: 20}, {wch: 12}, {wch: 12}, {wch: 10}, {wch: 8}];
+                        XLSX.utils.book_append_sheet(wb, ws2, '里程碑明细');
+                    }
+
+                    // 进展记录
+                    let progressData = [];
+                    this.projects.forEach(p => {
+                        p.progressRecords?.forEach(r => {
+                            progressData.push({
+                                '所属项目ID': p.id,
+                                '记录ID': r.id,
+                                '标题': r.title,
+                                '内容(HTML)': r.content,
+                                '创建时间': new Date(r.createdAt).toLocaleString('zh-CN')
+                            });
+                        });
+                    });
+                    
+                    if (progressData.length > 0) {
+                        const ws3 = XLSX.utils.json_to_sheet(progressData);
+                        ws3['!cols'] = [{wch: 15}, {wch: 15}, {wch: 25}, {wch: 60}, {wch: 20}];
+                        XLSX.utils.book_append_sheet(wb, ws3, '进展记录明细');
+                    }
+
+                    XLSX.writeFile(wb, `运营部项目数据_${new Date().toLocaleDateString('zh-CN')}.xlsx`);
+                    this.showToast('Excel导出成功');
+                } catch (err) {
+                    console.error('导出失败:', err);
+                    this.showToast('导出失败：' + err.message);
+                }
+            }
+
+            // Excel导入（修复版）
+            importExcel(input) {
+                const file = input.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, {type: 'array'});
+                        
+                        // 读取项目列表
+                        const projectSheet = workbook.Sheets['项目列表'];
+                        if (!projectSheet) {
+                            this.showToast('未找到"项目列表"工作表');
+                            return;
+                        }
+                        
+                        const projectsJson = XLSX.utils.sheet_to_json(projectSheet);
+                        if (projectsJson.length === 0) {
+                            this.showToast('Excel文件为空');
+                            return;
+                        }
+
+                        if (confirm(`检测到 ${projectsJson.length} 个项目，是否导入？这将覆盖当前数据。`)) {
+                            this.projects = projectsJson.map(p => ({
+                                id: p['项目ID'] || Date.now().toString(),
+                                name: p['项目名称'],
+                                owner: p['负责人'] || '',
+                                startDate: p['开始时间'],
+                                endDate: p['结束时间'],
+                                status: p['项目状态'] || '未启动',
+                                projectProgress: p['项目进度'] || 0,
+                                members: p['团队成员'] || '',
+                                description: p['项目描述'] || '',
+                                milestones: [],
+                                progressRecords: [],
+                                archived: p['是否归档'] === '是',
+                                createdAt: Date.now()
+                            }));
+                            
+                            // 读取里程碑
+                            const msSheet = workbook.Sheets['里程碑明细'];
+                            if (msSheet) {
+                                const msJson = XLSX.utils.sheet_to_json(msSheet);
+                                msJson.forEach(m => {
+                                    const project = this.projects.find(p => p.id === m['所属项目ID']);
+                                    if (project) {
+                                        project.milestones.push({
+                                            id: Date.now().toString(),
+                                            name: m['里程碑名称'],
+                                            startDate: m['开始时间'],
+                                            endDate: m['结束时间'],
+                                            status: m['状态'],
+                                            progress: m['进度'] || 0
+                                        });
+                                    }
+                                });
+                            }
+                            
+                            // 读取进展
+                            const prSheet = workbook.Sheets['进展记录明细'];
+                            if (prSheet) {
+                                const prJson = XLSX.utils.sheet_to_json(prSheet);
+                                prJson.forEach(r => {
+                                    const project = this.projects.find(p => p.id === r['所属项目ID']);
+                                    if (project) {
+                                        project.progressRecords.push({
+                                            id: r['记录ID'] || Date.now().toString(),
+                                            title: r['标题'],
+                                            content: r['内容(HTML)'] || r['内容'] || '',
+                                            createdAt: new Date(r['创建时间']).getTime() || Date.now()
+                                        });
+                                    }
+                                });
+                            }
+                            
+                            this.saveData();
+                            this.render();
+                            this.showToast(`成功导入 ${this.projects.length} 个项目`);
+                        }
+                    } catch (err) {
+                        console.error('导入失败:', err);
+                        this.showToast('导入失败：' + err.message);
+                    }
+                    input.value = '';
+                };
+                reader.readAsArrayBuffer(file);
+            }
+
+            render() {
+                const activeContainer = document.getElementById('active-projects');
+                const archivedContainer = document.getElementById('archived-projects');
+                const filtered = this.getFilteredProjects();
+                const archived = this.projects.filter(p => p.archived);
+                
+                document.getElementById('empty-active').style.display = filtered.length === 0 ? 'block' : 'none';
+                document.getElementById('empty-archived').style.display = archived.length === 0 ? 'block' : 'none';
+                
+                activeContainer.innerHTML = filtered.map((p, index) => this.renderProjectCard(p, index, filtered.length)).join('');
+                archivedContainer.innerHTML = archived.map(p => this.renderArchivedCard(p)).join('');
+            }
+
+            renderProjectCard(project, index, total) {
+                const statusClass = { '未启动': 'status-pending', '进行中': 'status-progress', '已完成': 'status-completed' }[project.status];
+                
+                return `
+                    <div class="project-card" data-id="${project.id}">
+                        <div class="project-card-layout">
+                            <div class="project-main">
+                                <div class="project-header">
+                                    <div>
+                                        <div class="project-title">${project.name}</div>
+                                        <div class="project-meta">
+                                            <span>📅 ${project.startDate} 至 ${project.endDate}</span>
+                                            ${project.owner ? `<span>👤 ${project.owner}</span>` : ''}
+                                        </div>
+                                    </div>
+                                    <select class="project-status ${statusClass}" onchange="app.changeStatus('${project.id}', this.value)">
+                                        <option value="未启动" ${project.status === '未启动' ? 'selected' : ''}>未启动</option>
+                                        <option value="进行中" ${project.status === '进行中' ? 'selected' : ''}>进行中</option>
+                                        <option value="已完成" ${project.status === '已完成' ? 'selected' : ''}>已完成</option>
+                                    </select>
+                                </div>
+                                
+                                ${project.description ? `<div class="project-description">${project.description}</div>` : ''}
+                                
+                                <div class="project-progress-section">
+                                    <div class="progress-header">
+                                        <span>📊 项目进度</span>
+                                        <span>${project.projectProgress || 0}%</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: ${project.projectProgress || 0}%"></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="milestones-section">
+                                    <div class="section-subtitle">里程碑 (${project.milestones?.length || 0}个)</div>
+                                    ${this.renderMilestonesGrid(project.milestones)}
+                                </div>
+                                
+                                <div class="project-footer">
+                                    <div class="project-btns">
+                                        <button class="btn btn-secondary btn-sm" onclick="app.openProgressModal('${project.id}')">📝 记录进展</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="app.viewDetails('${project.id}')">👁️ 查看详情</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="app.openProjectModal('${project.id}')">✏️ 编辑</button>
+                                        <button class="btn btn-danger btn-sm" onclick="app.deleteProject('${project.id}')">🗑️ 删除</button>
+                                    </div>
+                                    <div class="sort-btns">
+                                        <button class="btn-sort" onclick="app.moveProject('${project.id}', 'up')" ${index === 0 ? 'disabled' : ''}>↑</button>
+                                        <button class="btn-sort" onclick="app.moveProject('${project.id}', 'down')" ${index === total - 1 ? 'disabled' : ''}>↓</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="app.archiveProject('${project.id}')" style="margin-left: 8px;">📦 归档</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="project-side">
+                                <div class="progress-preview-section">
+                                    <div class="section-subtitle">最新进展</div>
+                                    ${this.renderProgressPreview(project)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderArchivedCard(project) {
+                return `
+                    <div class="project-card archived" style="padding: 20px;">
+                        <div class="project-header" style="margin-bottom: 12px;">
+                            <div>
+                                <div class="project-title" style="font-size: 16px;">${project.name}</div>
+                                <div class="project-meta">${project.startDate} 至 ${project.endDate}</div>
+                            </div>
+                            <span class="project-status status-archived">已归档</span>
+                        </div>
+                        <div style="font-size: 12px; color: #8B8680; margin-bottom: 12px;">
+                            进度: ${project.projectProgress || 0}% | 里程碑: ${project.milestones?.length || 0}个 | 进展: ${project.progressRecords?.length || 0}条
+                        </div>
+                        <div class="project-footer" style="padding-top: 12px;">
+                            <button class="btn btn-secondary btn-sm" onclick="app.viewDetails('${project.id}')">👁️ 查看</button>
+                            <button class="btn btn-success btn-sm" onclick="app.unarchiveProject('${project.id}')">↩️ 恢复</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            exportPNG() {
+                const element = document.getElementById('capture-area');
+                html2canvas(element, {
+                    scale: 2,
+                    backgroundColor: '#F5F1E8',
+                    useCORS: true
+                }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = `运营部项目看板_${new Date().toLocaleDateString('zh-CN')}.png`;
+                    link.href = canvas.toDataURL();
+                    link.click();
+                    this.showToast('PNG导出成功');
+                }).catch(err => {
+                    this.showToast('导出失败');
+                });
+            }
+
+            showToast(message) {
+                const toast = document.getElementById('toast');
+                toast.textContent = message;
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 3000);
+            }
+        }
+
+        const app = new ProjectManager();
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+            }
+        });
+    
+        </script>
 </body>
 </html>
