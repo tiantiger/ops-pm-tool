@@ -1,0 +1,1916 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>运营部项目管理工具</title>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #F5F1E8;
+            --bg-secondary: #FAF7F0;
+            --bg-card: #FFFFFF;
+            --primary: #D4C4A8;
+            --primary-dark: #C9B896;
+            --primary-light: #E8DFC8;
+            --text-primary: #5C5C5C;
+            --text-secondary: #8B8680;
+            --border: #E8E0D0;
+            --shadow: rgba(139, 134, 128, 0.08);
+            
+            --status-pending: #B8C5D0;
+            --status-progress: #E6C9A8;
+            --status-completed: #B8D4C8;
+            --status-archived: #D4C4B0;
+            
+            --danger: #D4A5A5;
+            --danger-dark: #C99494;
+            --success: #A5C9A5;
+            --info: #A8C5D9;
+            --warning: #E6D7A8;
+            
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background-color: var(--bg-primary);
+            background-image: 
+                radial-gradient(circle at 20% 50%, rgba(212, 196, 168, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(212, 196, 168, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 0%, rgba(232, 223, 200, 0.3) 0%, transparent 70%);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            padding-bottom: 40px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* 头部样式 */
+        .header {
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
+            border-radius: var(--radius-lg);
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 20px var(--shadow);
+            border: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(212, 196, 168, 0.2) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            color: var(--text-primary);
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .header-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            outline: none;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(212, 196, 168, 0.4);
+        }
+
+        .connection-status{font-size:13px;padding:8px 14px;border-radius:20px;background:var(--bg-secondary);border:1px solid var(--border);display:inline-flex;align-items:center;gap:6px;transition:all .3s;white-space:nowrap}
+.connection-status.connected{color:#5C5C5C}.connection-status.disconnected{color:var(--danger-dark);border-color:var(--danger)}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.status-dot.online{background:var(--success)}.status-dot.offline{background:var(--danger)}.status-dot.syncing{background:var(--primary);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(212, 196, 168, 0.5);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-secondary);
+            border-color: var(--primary);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            opacity: 0.9;
+        }
+
+        .btn-info {
+            background: var(--info);
+            color: white;
+        }
+
+        .btn-info:hover {
+            opacity: 0.9;
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: var(--text-primary);
+        }
+
+        .btn-warning:hover {
+            opacity: 0.9;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: var(--danger-dark);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: var(--radius-sm);
+        }
+
+        /* 筛选栏 */
+        .filter-bar {
+            background: var(--bg-card);
+            padding: 20px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 24px;
+            box-shadow: 0 2px 12px var(--shadow);
+            border: 1px solid var(--border);
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-group label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .filter-input, .filter-select {
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .filter-input:focus, .filter-select:focus {
+            border-color: var(--primary);
+            background: var(--bg-card);
+            box-shadow: 0 0 0 3px rgba(212, 196, 168, 0.1);
+        }
+
+        /* 内容区域 */
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: 2px;
+        }
+
+        .projects-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .archive-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        @media (max-width: 1200px) {
+            .archive-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .archive-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .project-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            box-shadow: 0 2px 12px var(--shadow);
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .project-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px var(--shadow);
+            border-color: var(--primary-light);
+        }
+
+        .project-card.archived {
+            opacity: 0.85;
+            background: var(--bg-secondary);
+        }
+
+        .project-card-layout {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 28px;
+        }
+
+        @media (max-width: 900px) {
+            .project-card-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .project-main {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .project-side {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            border-left: 1px solid var(--border);
+            padding-left: 28px;
+        }
+
+        @media (max-width: 900px) {
+            .project-side {
+                border-left: none;
+                border-top: 1px solid var(--border);
+                padding-left: 0;
+                padding-top: 20px;
+            }
+        }
+
+        .project-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .project-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .project-meta {
+            font-size: 14px;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .project-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            outline: none;
+        }
+
+        .status-pending { background: var(--status-pending); color: #fff; }
+        .status-progress { background: var(--status-progress); color: #fff; }
+        .status-completed { background: var(--status-completed); color: #fff; }
+        .status-archived { background: var(--status-archived); color: #fff; }
+
+        .project-info {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .project-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            background: var(--bg-secondary);
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            border-left: 3px solid var(--primary-light);
+        }
+
+        .project-progress-section {
+            background: var(--bg-secondary);
+            padding: 16px 20px;
+            border-radius: var(--radius-md);
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .progress-bar {
+            height: 10px;
+            background: var(--bg-primary);
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: 5px;
+            transition: width 0.6s ease;
+        }
+
+        .milestones-section { margin-top: 8px; }
+
+        .section-subtitle {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-subtitle::before {
+            content: '';
+            width: 3px;
+            height: 14px;
+            background: var(--primary);
+            border-radius: 2px;
+        }
+
+        .milestones-grid-5 {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+
+        @media (max-width: 1200px) {
+            .milestones-grid-5 { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        @media (max-width: 768px) {
+            .milestones-grid-5 { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        .milestone-card-small {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            transition: all 0.3s;
+        }
+
+        .milestone-card-small:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px var(--shadow);
+        }
+
+        .milestone-card-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .milestone-card-date {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .milestone-card-bar {
+            height: 4px;
+            background: var(--bg-primary);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+
+        .milestone-card-fill {
+            height: 100%;
+            border-radius: 2px;
+        }
+
+        .milestone-card-status {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            font-weight: 500;
+        }
+
+        .milestone-status-pending { background: var(--status-pending); color: white; }
+        .milestone-status-progress { background: var(--status-progress); color: white; }
+        .milestone-status-completed { background: var(--status-completed); color: white; }
+        .milestone-status-overdue { background: var(--danger); color: white; }
+
+        .progress-preview-section { flex: 1; }
+
+        .progress-preview-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .progress-preview-item {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 14px;
+            position: relative;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .progress-preview-item:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px var(--shadow);
+            transform: translateX(4px);
+        }
+
+        .progress-preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .progress-preview-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .progress-preview-date {
+            font-size: 11px;
+            color: var(--text-secondary);
+            background: var(--bg-primary);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .progress-preview-content {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .progress-preview-hint {
+            font-size: 11px;
+            color: var(--primary-dark);
+            margin-top: 8px;
+            text-align: right;
+        }
+
+        .no-progress-tip {
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            font-style: italic;
+        }
+
+        .project-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .project-btns { display: flex; gap: 10px; }
+
+        .sort-btns {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .btn-sort {
+            padding: 6px 10px;
+            font-size: 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.3s;
+        }
+
+        .btn-sort:hover:not(:disabled) {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .btn-sort:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+
+        /* 弹窗样式 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(92, 92, 92, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 700px;
+            max-height: 90vh;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            transform: scale(0.95);
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-overlay.active .modal { transform: scale(1); }
+
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            font-size: 18px;
+        }
+
+        .modal-close:hover {
+            background: var(--danger);
+            color: white;
+            transform: rotate(90deg);
+        }
+
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .form-group { margin-bottom: 20px; }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .form-label .required { color: var(--danger); margin-left: 2px; }
+
+        .form-input, .form-textarea, .form-select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .form-input:focus, .form-textarea:focus, .form-select:focus {
+            border-color: var(--primary);
+            background: var(--bg-card);
+            box-shadow: 0 0 0 3px rgba(212, 196, 168, 0.15);
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        @media (max-width: 640px) {
+            .form-row { grid-template-columns: 1fr; }
+        }
+
+        .form-hint {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        .modal-footer {
+            padding: 20px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            background: var(--bg-secondary);
+        }
+
+        /* 富文本编辑器 */
+        .rich-editor {
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--bg-secondary);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .rich-editor-toolbar {
+            padding: 8px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 4px;
+            background: var(--bg-primary);
+            flex-wrap: wrap;
+        }
+
+        .rich-editor-btn {
+            padding: 6px 10px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .rich-editor-btn:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .rich-editor-content {
+            min-height: 200px;
+            padding: 16px;
+            outline: none;
+            background: var(--bg-card);
+        }
+
+        .rich-editor-content img {
+            max-width: 100%;
+            cursor: se-resize;
+            border: 2px solid transparent;
+            transition: border-color 0.3s;
+        }
+
+        .rich-editor-content img:hover {
+            border-color: var(--primary);
+        }
+
+        .rich-editor-content img.resizing {
+            border-color: var(--primary-dark);
+            opacity: 0.8;
+        }
+
+        .progress-item {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .progress-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .progress-item-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            flex: 1;
+        }
+
+        .progress-item-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .milestone-form {
+            background: var(--bg-secondary);
+            padding: 16px;
+            border-radius: var(--radius-md);
+            margin-bottom: 16px;
+            border: 1px dashed var(--border);
+        }
+
+        .milestone-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .milestone-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+        }
+
+        .archive-section {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+            border-radius: var(--radius-lg);
+            padding: 30px;
+            margin-top: 40px;
+            border: 2px dashed var(--border);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--text-primary);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 2000;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .detail-content { line-height: 1.8; }
+        .detail-section { margin-bottom: 24px; }
+        .detail-section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--primary-light);
+        }
+
+        .confirm-modal { max-width: 400px; }
+        .confirm-text {
+            margin: 20px 0;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 20px;
+                text-align: center;
+            }
+            .filter-bar { flex-direction: column; }
+            .project-card { padding: 20px; }
+        }
+
+        .file-input { display: none; }
+
+        .progress-detail-content {
+            background: var(--bg-secondary);
+            padding: 20px;
+            border-radius: var(--radius-md);
+            max-height: 60vh;
+            overflow-y: auto;
+            line-height: 1.8;
+        }
+
+        /* 恢复选项样式 */
+        .restore-options {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .restore-option {
+            display: flex;
+            align-items: center;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .restore-option:hover {
+            border-color: var(--primary);
+            background: var(--bg-primary);
+        }
+
+        .restore-option input[type="radio"] {
+            margin-right: 12px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .restore-option-label {
+            flex: 1;
+            cursor: pointer;
+        }
+
+        .restore-option-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .restore-option-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .restore-option-status {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: var(--bg-card);
+            color: var(--text-secondary);
+        }
+
+        .restore-option-status.available {
+            background: var(--success);
+            color: white;
+        }
+
+        .restore-option-status.unavailable {
+            background: var(--bg-card);
+            color: var(--text-secondary);
+        }
+
+        .backup-info {
+            background: var(--bg-secondary);
+            padding: 12px;
+            border-radius: var(--radius-md);
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="capture-area">
+        <div class="header">
+            <div class="header-content">
+                <div>
+                    <h1>📋 运营部项目管理工具</h1>
+                    <div class="header-subtitle">团队协作版 · GitHub 云同步</div>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-warning" onclick="app.openRestoreModal()">
+                        <span>⏰</span> 恢复内容
+                    </button>
+                    <button class="btn btn-info" onclick="app.exportExcel()">
+                        <span>📊</span> 导出Excel
+                    </button>
+                    <button class="btn btn-success" onclick="document.getElementById('import-file').click()">
+                        <span>📥</span> 导入Excel
+                    </button>
+                    <input type="file" id="import-file" class="file-input" accept=".xlsx,.xls" onchange="app.importExcel(this)">
+                    <button class="btn btn-secondary" onclick="app.exportPNG()">
+                        <span>📷</span> 导出PNG
+                    </button>
+                    <button class="btn btn-primary" onclick="app.openProjectModal()">
+                        <span>+</span> 新增项目
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="filter-bar">
+            <div class="filter-group">
+                <label>项目名称</label>
+                <input type="text" class="filter-input" id="filter-name" placeholder="搜索项目名称..." oninput="app.filterProjects()">
+            </div>
+            <div class="filter-group">
+                <label>负责人</label>
+                <input type="text" class="filter-input" id="filter-owner" placeholder="搜索负责人..." oninput="app.filterProjects()">
+            </div>
+            <div class="filter-group">
+                <label>项目状态</label>
+                <select class="filter-select" id="filter-status" onchange="app.filterProjects()">
+                    <option value="">全部状态</option>
+                    <option value="未启动">未启动</option>
+                    <option value="进行中">进行中</option>
+                    <option value="已完成">已完成</option>
+                </select>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="app.clearFilters()" style="margin-top: 20px;">
+                清空筛选
+            </button>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">进行中的项目</h2>
+            <div id="active-projects" class="projects-list"></div>
+            <div id="empty-active" class="empty-state" style="display: none;">
+                <div class="empty-icon">📭</div>
+                <div class="empty-text">暂无进行中的项目</div>
+            </div>
+        </div>
+
+        <div class="archive-section">
+            <div class="archive-header">
+                <h2 class="section-title" style="margin: 0;">📦 归档项目池</h2>
+            </div>
+            <div id="archived-projects" class="archive-grid"></div>
+            <div id="empty-archived" class="empty-state" style="display: none;">
+                <div class="empty-icon">🗃️</div>
+                <div class="empty-text">暂无归档项目</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 项目编辑弹窗 -->
+    <div class="modal-overlay" id="project-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-title">新增项目</h3>
+                <button class="modal-close" onclick="app.closeModal('project-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="project-form">
+                    <input type="hidden" id="project-id">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">项目名称 <span class="required">*</span></label>
+                            <input type="text" class="form-input" id="project-name" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">负责人</label>
+                            <input type="text" class="form-input" id="project-owner">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">开始时间 <span class="required">*</span></label>
+                            <input type="date" class="form-input" id="project-start" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">结束时间 <span class="required">*</span></label>
+                            <input type="date" class="form-input" id="project-end" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">项目状态</label>
+                            <select class="form-select" id="project-status">
+                                <option value="未启动">未启动</option>
+                                <option value="进行中">进行中</option>
+                                <option value="已完成">已完成</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">项目进度 (%)</label>
+                            <input type="number" class="form-input" id="project-progress" min="0" max="100" value="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">团队成员</label>
+                        <input type="text" class="form-input" id="project-members" placeholder="多个成员用逗号分隔">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">项目描述</label>
+                        <textarea class="form-textarea" id="project-desc"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">里程碑管理</label>
+                        <div class="milestone-form">
+                            <div class="form-row">
+                                <input type="text" class="form-input" id="milestone-name" placeholder="里程碑名称" style="flex: 1;">
+                                <input type="date" class="form-input" id="milestone-start">
+                                <input type="date" class="form-input" id="milestone-end">
+                                <select class="form-select" id="milestone-status" style="width: 120px;">
+                                    <option value="未开始">未开始</option>
+                                    <option value="进行中">进行中</option>
+                                    <option value="已完成">已完成</option>
+                                </select>
+                                <input type="number" class="form-input" id="milestone-progress" placeholder="进度%" min="0" max="100" style="width: 100px;">
+                                <button type="button" class="btn btn-primary btn-sm" onclick="app.addMilestone()">添加</button>
+                            </div>
+                        </div>
+                        <div id="milestone-list" class="milestone-list"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="app.closeModal('project-modal')">取消</button>
+                <button class="btn btn-primary" onclick="app.saveProject()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 进展管理弹窗 -->
+    <div class="modal-overlay" id="progress-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">项目进展记录</h3>
+                <button class="modal-close" onclick="app.closeModal('progress-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="progress-project-id">
+                <input type="hidden" id="editing-progress-id">
+                
+                <div class="form-group">
+                    <label class="form-label">进展标题</label>
+                    <input type="text" class="form-input" id="progress-title">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">进展内容</label>
+                    <div class="rich-editor">
+                        <div class="rich-editor-toolbar">
+                            <button type="button" class="rich-editor-btn" onclick="app.formatDoc('bold')"><b>B</b></button>
+                            <button type="button" class="rich-editor-btn" onclick="app.formatDoc('italic')"><i>I</i></button>
+                            <button type="button" class="rich-editor-btn" onclick="app.formatDoc('underline')"><u>U</u></button>
+                            <button type="button" class="rich-editor-btn" onclick="app.formatDoc('insertUnorderedList')">• 列表</button>
+                            <button type="button" class="rich-editor-btn" onclick="app.insertLink()">🔗 链接</button>
+                            <button type="button" class="rich-editor-btn" onclick="app.insertImage()">🖼️ 图片</button>
+                        </div>
+                        <div class="rich-editor-content" id="progress-content" contenteditable="true"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">历史进展（可编辑/删除）</label>
+                    <div id="progress-history" class="progress-list"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="app.closeModal('progress-modal')">关闭</button>
+                <button class="btn btn-primary" onclick="app.saveProgress()">保存进展</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 进展详情弹窗 -->
+    <div class="modal-overlay" id="progress-detail-modal">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="progress-detail-title">进展详情</h3>
+                <button class="modal-close" onclick="app.closeModal('progress-detail-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="progress-detail-content" id="progress-detail-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="app.closeModal('progress-detail-modal')">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    
+                        <span class="restore-option-status" id="status-5min">检查中...</span>
+                    </label>
+                    
+                    <label class="restore-option">
+                        <input type="radio" name="restore-time" value="1hour" id="restore-1hour">
+                        <div class="restore-option-label">
+                            <div class="restore-option-title">1小时前</div>
+                            <div class="restore-option-desc">恢复到1小时前的完整备份</div>
+                        </div>
+                        <span class="restore-option-status" id="status-1hour">检查中...</span>
+                    </label>
+                    
+                    <label class="restore-option">
+                        <input type="radio" name="restore-time" value="6hour" id="restore-6hour">
+                        <div class="restore-option-label">
+                            <div class="restore-option-title">6小时前</div>
+                            <div class="restore-option-desc">恢复到6小时前的完整备份</div>
+                        </div>
+                        <span class="restore-option-status" id="status-6hour">检查中...</span>
+                    </label>
+                </div>
+                
+                <div style="margin-top: 20px; padding: 12px; background: rgba(212, 196, 168, 0.1); border-radius: 8px; font-size: 12px; color: var(--text-secondary);">
+                    💡 提示：系统每5分钟自动创建快照，恢复操作将覆盖当前所有数据，请谨慎操作。
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="app.closeModal('restore-modal')">取消</button>
+                <button class="btn btn-warning" onclick="app.confirmRestore()">确认恢复</button>
+            </div>
+        </div>
+    </div>
+
+    
+    </div>
+
+    <!-- 详情查看弹窗 -->
+    <div class="modal-overlay" id="detail-modal">
+        <div class="modal" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 class="modal-title">项目详情</h3>
+                <button class="modal-close" onclick="app.closeModal('detail-modal')">&times;</button>
+            </div>
+            <div class="modal-body detail-content" id="detail-content"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="app.closeModal('detail-modal')">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 确认弹窗 -->
+    <div class="modal-overlay" id="confirm-modal">
+        <div class="modal confirm-modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="confirm-title">确认操作</h3>
+                <button class="modal-close" onclick="app.closeModal('confirm-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="confirm-text" id="confirm-text">您确定要执行此操作吗？</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="app.closeModal('confirm-modal')">取消</button>
+                <button class="btn btn-danger" id="confirm-btn">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    // ====== GitHub 配置（部署前必须替换）======
+const GITHUB_CONFIG = {
+    token:  'YOUR_GITHUB_TOKEN',   // GitHub Personal Access Token (需 repo 权限)
+    owner:  'tiantiger',           // 你的 GitHub 用户名
+    repo:   'ops-pm-tool',        // 仓库名
+    branch: 'main',               // 分支名
+    file:   'data.json'           // 数据文件名
+};
+
+// ====== GitHub 数据层 ======
+class GithubDB {
+    constructor(config) {
+        this.config = config;
+        this.baseUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.file}`;
+        this.headers = {
+            'Authorization': `token ${config.token}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+        };
+        this.data = { projects: {} };
+        this.sha = null;
+        this.lastPoll = 0;
+        this.pollInterval = 15000; // 15秒轮询
+        this.onUpdate = null;
+        this._pollTimer = null;
+        this._writeLock = false;
+    }
+
+    isConfigured() {
+        return this.config.token && this.config.token !== 'YOUR_GITHUB_TOKEN';
+    }
+
+    async init(onReady) {
+        try {
+            await this.read();
+            if (onReady) onReady(true);
+            this.startPoll();
+        } catch (e) {
+            // 文件不存在则创建
+            if (e.status === 404) {
+                await this.write({ projects: {} }, null);
+                if (onReady) onReady(true);
+                this.startPoll();
+            } else {
+                console.error('GithubDB init error:', e);
+                if (onReady) onReady(false, e.message);
+            }
+        }
+    }
+
+    async read() {
+        const url = this.baseUrl + '?ref=' + this.config.branch;
+        const res = await fetch(url, { headers: this.headers });
+        if (!res.ok) { const err = new Error(res.statusText); err.status = res.status; throw err; }
+        const json = await res.json();
+        this.sha = json.sha;
+        try {
+            this.data = JSON.parse(atob(json.content));
+            if (!this.data.projects) this.data.projects = {};
+        } catch { this.data = { projects: {} }; }
+        return this.data;
+    }
+
+    async write(data, sha) {
+        if (this._writeLock) return;
+        this._writeLock = true;
+        try {
+            const currentSha = sha || this.sha;
+            if (!currentSha) await this.read(); // 刷新 SHA
+            const payload = {
+                message: 'Update project data',
+                content: btoa(unescape(encodeURIComponent(JSON.stringify(data)))),
+                sha: this.sha || currentSha,
+                branch: this.config.branch
+            };
+            const res = await fetch(this.baseUrl, {
+                method: 'PUT',
+                headers: this.headers,
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                // SHA 冲突 → 重试一次
+                if (res.status === 409 && errData.message?.includes('SHA')) {
+                    await this.read(); // 获取最新 SHA
+                    payload.sha = this.sha;
+                    payload.content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+                    const retry = await fetch(this.baseUrl, { method: 'PUT', headers: this.headers, body: JSON.stringify(payload) });
+                    if (!retry.ok) throw new Error('写入失败(冲突)');
+                    const retryJson = await retry.json();
+                    this.sha = retryJson.content.sha;
+                    this.data = data;
+                    return;
+                }
+                throw new Error(errData.message || '写入失败');
+            }
+            const result = await res.json();
+            this.sha = result.content.sha;
+            this.data = data;
+            this.lastPoll = Date.now();
+        } finally {
+            this._writeLock = false;
+        }
+    }
+
+    // 单个项目更新（避免冲突）
+    async updateProject(id, projectData) {
+        await this.read(); // 获取最新 SHA
+        const data = JSON.parse(JSON.stringify(this.data));
+        data.projects[id] = { ...data.projects[id], ...projectData };
+        await this.write(data);
+        if (this.onUpdate) this.onUpdate(data);
+    }
+
+    async removeProject(id) {
+        await this.read();
+        const data = JSON.parse(JSON.stringify(this.data));
+        delete data.projects[id];
+        await this.write(data);
+        if (this.onUpdate) this.onUpdate(data);
+    }
+
+    async batchUpdate(updates) {
+        // updates: { 'projectId': { field: value }, ... }
+        await this.read();
+        const data = JSON.parse(JSON.stringify(this.data));
+        Object.entries(updates).forEach(([id, fields]) => {
+            if (fields === null) { delete data.projects[id]; return; }
+            data.projects[id] = { ...(data.projects[id] || {}), ...fields };
+        });
+        await this.write(data);
+        if (this.onUpdate) this.onUpdate(data);
+    }
+
+    startPoll() {
+        if (this._pollTimer) clearInterval(this._pollTimer);
+        this._pollTimer = setInterval(async () => {
+            try {
+                const oldSha = this.sha;
+                await this.read();
+                if (this.sha !== oldSha && this.onUpdate) {
+                    this.onUpdate(this.data);
+                }
+            } catch (e) {
+                console.warn('Poll error:', e.message);
+            }
+        }, this.pollInterval);
+    }
+
+    stopPoll() {
+        if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
+    }
+}
+
+// ====== 项目管理器 ======
+class ProjectManager {
+    constructor() {
+        this.projects = [];
+        this.currentMilestones = [];
+        this.editingId = null;
+        this.editingProgressId = null;
+        this.currentProgressProjectId = null;
+        this.db = new GithubDB(GITHUB_CONFIG);
+        this.init();
+    }
+
+    init() {
+        if (!this.db.isConfigured()) {
+            this.showSetupGuide();
+        } else {
+            document.getElementById('active-projects').innerHTML =
+                '<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text">正在从 GitHub 加载数据...</div></div>';
+            document.getElementById('connection-status').innerHTML = '<span class="status-dot syncing"></span> 连接中...';
+
+            this.db.init((ok, errMsg) => {
+                if (ok) {
+                    this.projects = Object.values(this.db.data.projects);
+                    this.updateConnectionStatus(true);
+                    this.render();
+                    this.tryMigrate();
+                } else {
+                    this.updateConnectionStatus(false);
+                    document.getElementById('active-projects').innerHTML =
+                        '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">连接失败：' + errMsg + '</div></div>';
+                }
+            });
+
+            this.db.onUpdate = (data) => {
+                this.projects = Object.values(data.projects || {});
+                this.render();
+                this.updateConnectionStatus(true);
+            };
+        }
+
+        this.initImageResize();
+        document.getElementById('project-start')?.addEventListener('change', () => this.validateDates());
+        document.getElementById('project-end')?.addEventListener('change', () => this.validateDates());
+    }
+
+    tryMigrate() {
+        const local = localStorage.getItem('pm_projects');
+        if (!local) return;
+        try {
+            const arr = JSON.parse(local);
+            if (!Array.isArray(arr) || !arr.length) return;
+            if (confirm('检测到本地有 ' + arr.length + ' 个项目数据。\n\n是否迁移到 GitHub？迁移后团队成员即可看到。')) {
+                const updates = {};
+                arr.forEach(p => { updates[p.id] = { ...p, sortOrder: p.sortOrder || p.createdAt || Date.now() }; });
+                this.db.data.projects = { ...this.db.data.projects, ...updates };
+                this.db.write(this.db.data);
+                localStorage.removeItem('pm_projects');
+                this.showToast('✅ 本地数据已迁移到 GitHub！');
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    updateConnectionStatus(connected) {
+        const el = document.getElementById('connection-status');
+        if (!el) return;
+        if (connected) {
+            const t = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            el.innerHTML = '<span class="status-dot online"></span> 已同步 ' + t;
+            el.className = 'connection-status connected';
+        } else {
+            el.innerHTML = '<span class="status-dot offline"></span> 未连接';
+            el.className = 'connection-status disconnected';
+        }
+    }
+
+    showSetupGuide() {
+        document.getElementById('active-projects').innerHTML = `
+        <div style="background:var(--bg-card);border-radius:var(--radius-lg);padding:40px;max-width:720px;margin:0 auto;box-shadow:0 2px 12px var(--shadow);border:1px solid var(--border)">
+            <h2 style="font-size:22px;margin-bottom:8px">🔧 配置 GitHub 数据同步</h2>
+            <p style="color:var(--text-secondary);margin-bottom:24px;line-height:1.8">用文本编辑器打开此 HTML 文件，找到顶部的 <code style="background:#FAF7F0;padding:2px 6px;border-radius:4px">GITHUB_CONFIG</code>，替换以下三项：</p>
+            <div style="background:var(--bg-secondary);padding:20px;border-radius:var(--radius-md);margin-bottom:16px">
+                <h3 style="font-size:15px;margin-bottom:10px">步骤 1：创建 GitHub Token</h3>
+                <ol style="padding-left:20px;color:var(--text-secondary);line-height:2.2">
+                    <li>打开 GitHub → 右上角头像 → Settings → Developer settings → Personal access tokens → Tokens (classic)</li>
+                    <li>Generate new token (classic)，勾选 <code>repo</code> 权限即可</li>
+                    <li>复制生成的 token（只显示一次）</li>
+                </ol>
+            </div>
+            <div style="background:var(--bg-secondary);padding:20px;border-radius:var(--radius-md);margin-bottom:16px">
+                <h3 style="font-size:15px;margin-bottom:10px">步骤 2：创建 GitHub 仓库</h3>
+                <ol style="padding-left:20px;color:var(--text-secondary);line-height:2.2">
+                    <li>在 GitHub 上新建仓库（如 ops-pm-tool），选 Private（私有更安全）</li>
+                    <li>把本文件（index.html）推送到仓库</li>
+                </ol>
+            </div>
+            <div style="background:var(--bg-secondary);padding:20px;border-radius:var(--radius-md);margin-bottom:16px">
+                <h3 style="font-size:15px;margin-bottom:10px">步骤 3：替换配置</h3>
+                <p style="color:var(--text-secondary);line-height:2">修改 GITHUB_CONFIG 中的三个值：</p>
+                <code style="display:block;margin-top:8px;background:#fff;padding:10px 14px;border-radius:6px;font-size:13px;border:1px solid var(--border);white-space:pre-wrap">token:  '你刚生成的token',
+owner:  '${GITHUB_CONFIG.owner}',
+repo:   '你的仓库名',
+branch: 'main'</code>
+            </div>
+            <div style="background:var(--bg-secondary);padding:20px;border-radius:var(--radius-md);margin-bottom:16px">
+                <h3 style="font-size:15px;margin-bottom:10px">步骤 4：开启 GitHub Pages</h3>
+                <ol style="padding-left:20px;color:var(--text-secondary);line-height:2.2">
+                    <li>仓库 → Settings → Pages</li>
+                    <li>Source 选 Deploy from a branch → 选 main → Save</li>
+                    <li>等一两分钟，页面上方会出现链接，发给团队成员即可</li>
+                </ol>
+            </div>
+            <div style="background:rgba(212,165,165,.12);padding:16px;border-radius:var(--radius-md);border-left:3px solid var(--danger);margin-top:16px">
+                <p style="color:var(--danger-dark);font-size:13px;line-height:1.8">⚠️ Token 嵌入在前端代码中，建议使用<strong>最小权限 token</strong>（仅勾选 repo）。
+                如果仓库是 Private 的，风险较低。不要给公开仓库配高权限 token。</p>
+            </div>
+        </div>`;
+        const cs = document.getElementById('connection-status');
+        if (cs) { cs.innerHTML = '<span class="status-dot offline"></span> 未配置'; cs.className = 'connection-status disconnected'; }
+    }
+
+    // ====== 弹窗 & 工具 ======
+    closeModal(id) {
+        document.getElementById(id).classList.remove('active');
+        if (id === 'progress-modal') { this.editingProgressId = null; this.currentProgressProjectId = null; }
+        if (id === 'project-modal') this.editingId = null;
+    }
+    validateDates() {
+        const s = document.getElementById('project-start').value, e = document.getElementById('project-end').value;
+        if (s && e && s > e) { this.showToast('开始时间必须早于结束时间'); document.getElementById('project-end').value = ''; }
+    }
+    showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000); }
+
+    // ====== 项目 CRUD ======
+    openProjectModal(id = null) {
+        this.editingId = id;
+        document.getElementById('project-form').reset();
+        this.currentMilestones = [];
+        document.getElementById('milestone-list').innerHTML = '';
+        const title = document.getElementById('modal-title');
+        if (id) {
+            const p = this.projects.find(x => x.id === id);
+            if (p) {
+                title.textContent = '编辑项目';
+                document.getElementById('project-name').value = p.name;
+                document.getElementById('project-owner').value = p.owner || '';
+                document.getElementById('project-start').value = p.startDate;
+                document.getElementById('project-end').value = p.endDate;
+                document.getElementById('project-status').value = p.status;
+                document.getElementById('project-progress').value = p.projectProgress || 0;
+                document.getElementById('project-members').value = p.members || '';
+                document.getElementById('project-desc').value = p.description || '';
+                if (p.milestones) { this.currentMilestones = [...p.milestones]; this.renderMilestones(); }
+            }
+        } else { title.textContent = '新增项目'; document.getElementById('project-progress').value = '0'; }
+        document.getElementById('project-modal').classList.add('active');
+    }
+
+    async saveProject() {
+        const name = document.getElementById('project-name').value.trim();
+        const owner = document.getElementById('project-owner').value.trim();
+        const startDate = document.getElementById('project-start').value;
+        const endDate = document.getElementById('project-end').value;
+        const status = document.getElementById('project-status').value;
+        const projectProgress = parseInt(document.getElementById('project-progress').value) || 0;
+        const members = document.getElementById('project-members').value.trim();
+        const description = document.getElementById('project-desc').value.trim();
+        if (!name) { this.showToast('请输入项目名称'); return; }
+        if (!startDate || !endDate) { this.showToast('请选择起止时间'); return; }
+        if (startDate > endDate) { this.showToast('开始时间必须早于结束时间'); return; }
+        if (this.projects.find(p => p.name === name && p.id !== this.editingId)) { this.showToast('项目名称已存在'); return; }
+
+        const now = Date.now();
+        try {
+            if (this.editingId) {
+                const old = this.projects.find(p => p.id === this.editingId);
+                await this.db.updateProject(this.editingId, {
+                    name, owner, startDate, endDate, status, projectProgress, members, description,
+                    milestones: this.currentMilestones,
+                    ...(old?.archived ? { archived: true } : {})
+                });
+            } else {
+                await this.db.updateProject(now.toString(), {
+                    id: now.toString(), name, owner, startDate, endDate, status, projectProgress, members, description,
+                    milestones: this.currentMilestones, progressRecords: [],
+                    archived: false, createdAt: now, sortOrder: now
+                });
+            }
+            this.closeModal('project-modal');
+            this.showToast(this.editingId ? '项目更新成功' : '项目创建成功');
+        } catch (e) { this.showToast('保存失败：' + e.message); }
+    }
+
+    async deleteProject(id) {
+        const p = this.projects.find(x => x.id === id); if (!p) return;
+        document.getElementById('confirm-title').textContent = '删除项目';
+        document.getElementById('confirm-text').textContent = '确定删除「' + p.name + '」吗？所有团队成员都将看到。';
+        document.getElementById('confirm-btn').onclick = async () => {
+            try { await this.db.removeProject(id); this.showToast('项目已删除'); }
+            catch (e) { this.showToast('删除失败：' + e.message); }
+            this.closeModal('confirm-modal');
+        };
+        document.getElementById('confirm-modal').classList.add('active');
+    }
+
+    async archiveProject(id) { try { await this.db.updateProject(id, { archived: true }); this.showToast('项目已归档'); } catch (e) { this.showToast(e.message); } }
+    async unarchiveProject(id) { try { await this.db.updateProject(id, { archived: false }); this.showToast('项目已恢复'); } catch (e) { this.showToast(e.message); } }
+    async changeStatus(id, s) { try { await this.db.updateProject(id, { status: s }); this.showToast('状态已更新：' + s); } catch (e) { this.showToast(e.message); } }
+
+    async moveProject(id, direction) {
+        const active = this.projects.filter(p => !p.archived).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+        const idx = active.findIndex(p => p.id === id);
+        const swap = direction === 'up' ? idx - 1 : idx + 1;
+        if (swap < 0 || swap >= active.length) return;
+        try {
+            await this.db.batchUpdate({
+                [active[idx].id]: { sortOrder: active[swap].sortOrder || 0 },
+                [active[swap].id]: { sortOrder: active[idx].sortOrder || 0 }
+            });
+        } catch (e) { this.showToast(e.message); }
+    }
+
+    // ====== 里程碑 ======
+    addMilestone() {
+        const name = document.getElementById('milestone-name').value.trim();
+        const start = document.getElementById('milestone-start').value;
+        const end = document.getElementById('milestone-end').value;
+        const status = document.getElementById('milestone-status').value;
+        const progress = parseInt(document.getElementById('milestone-progress').value) || 0;
+        if (!name || !start || !end) { this.showToast('请填写完整里程碑信息'); return; }
+        if (start > end) { this.showToast('开始时间必须早于结束时间'); return; }
+        if (this.currentMilestones.some(m => m.name === name)) { this.showToast('里程碑名称不能重复'); return; }
+        this.currentMilestones.push({ id: Date.now().toString(), name, startDate: start, endDate: end, status, progress, isOverdue: new Date(end) < new Date() && status !== '已完成' });
+        document.getElementById('milestone-name').value = '';
+        document.getElementById('milestone-start').value = '';
+        document.getElementById('milestone-end').value = '';
+        document.getElementById('milestone-progress').value = '';
+        this.renderMilestones();
+    }
+    removeMilestone(id) { this.currentMilestones = this.currentMilestones.filter(m => m.id !== id); this.renderMilestones(); }
+    renderMilestones() {
+        const c = document.getElementById('milestone-list');
+        if (!this.currentMilestones.length) { c.innerHTML = '<div style="text-align:center;color:#999;padding:20px">暂无里程碑</div>'; return; }
+        c.innerHTML = this.currentMilestones.map(m => '<div class="milestone-item"><div style="flex:1"><div style="font-weight:600">' + m.name + '</div><div style="font-size:12px;color:var(--text-secondary)">' + m.startDate + ' 至 ' + m.endDate + ' | ' + m.progress + '%</div></div><button type="button" class="btn btn-danger btn-sm" onclick="app.removeMilestone(\'' + m.id + '\')">删除</button></div>').join('');
+    }
+
+    // ====== 进展记录 ======
+    openProgressModal(id) {
+        this.currentProgressProjectId = id;
+        document.getElementById('editing-progress-id').value = '';
+        document.getElementById('progress-title').value = '';
+        document.getElementById('progress-content').innerHTML = '';
+        this.loadProgressHistory(id);
+        document.getElementById('progress-modal').classList.add('active');
+    }
+
+    loadProgressHistory(id) {
+        const p = this.projects.find(x => x.id === id);
+        const c = document.getElementById('progress-history');
+        if (!p || !p.progressRecords?.length) { c.innerHTML = '<div style="text-align:center;color:#999;padding:20px">暂无进展记录</div>'; return; }
+        const sorted = [...p.progressRecords].sort((a, b) => b.createdAt - a.createdAt);
+        c.innerHTML = sorted.map(r => '<div class="progress-item"><div class="progress-item-header"><span class="progress-item-title">' + r.title + '</span><div class="progress-item-actions"><button class="btn btn-secondary btn-sm" onclick="app.editProgress(\'' + r.id + '\')">编辑</button><button class="btn btn-danger btn-sm" onclick="app.deleteProgress(\'' + r.id + '\')">删除</button></div></div><div style="font-size:13px;color:var(--text-secondary);cursor:pointer" onclick="app.viewProgressDetail(\'' + id + '\',\'' + r.id + '\')">' + r.content.replace(/<[^>]*>/g, '').substring(0, 80) + '...</div></div>').join('');
+    }
+
+    editProgress(pid) {
+        const p = this.projects.find(x => x.id === this.currentProgressProjectId); if (!p) return;
+        const r = p.progressRecords?.find(x => x.id === pid); if (!r) return;
+        this.editingProgressId = pid;
+        document.getElementById('editing-progress-id').value = pid;
+        document.getElementById('progress-title').value = r.title;
+        document.getElementById('progress-content').innerHTML = r.content;
+    }
+
+    async deleteProgress(pid) {
+        document.getElementById('confirm-title').textContent = '删除进展';
+        document.getElementById('confirm-text').textContent = '确定删除这条进展记录吗？';
+        document.getElementById('confirm-btn').onclick = async () => {
+            const p = this.projects.find(x => x.id === this.currentProgressProjectId);
+            if (p?.progressRecords) {
+                try {
+                    await this.db.updateProject(this.currentProgressProjectId, {
+                        progressRecords: p.progressRecords.filter(r => r.id !== pid)
+                    });
+                    p.progressRecords = p.progressRecords.filter(r => r.id !== pid);
+                    this.loadProgressHistory(this.currentProgressProjectId);
+                    this.showToast('进展已删除');
+                } catch (e) { this.showToast(e.message); }
+            }
+            this.closeModal('confirm-modal');
+        };
+        document.getElementById('confirm-modal').classList.add('active');
+    }
+
+    async saveProgress() {
+        const pid = this.currentProgressProjectId;
+        const title = document.getElementById('progress-title').value.trim();
+        const content = document.getElementById('progress-content').innerHTML;
+        const editId = document.getElementById('editing-progress-id').value;
+        if (!title || !content || content === '<br>') { this.showToast('请填写完整信息'); return; }
+        const p = this.projects.find(x => x.id === pid); if (!p) return;
+        let records = [...(p.progressRecords || [])];
+        if (editId) { records = records.map(r => r.id === editId ? { ...r, title, content, updatedAt: Date.now() } : r); this.editingProgressId = null; }
+        else { records.push({ id: Date.now().toString(), title, content, createdAt: Date.now() }); }
+        try {
+            await this.db.updateProject(pid, { progressRecords: records });
+            p.progressRecords = records;
+            this.loadProgressHistory(pid);
+            document.getElementById('progress-title').value = '';
+            document.getElementById('progress-content').innerHTML = '';
+            document.getElementById('editing-progress-id').value = '';
+            this.showToast(editId ? '进展已更新' : '进展已保存');
+        } catch (e) { this.showToast('保存失败：' + e.message); }
+    }
+
+    viewProgressDetail(pid, rid) {
+        const p = this.projects.find(x => x.id === pid); if (!p) return;
+        const r = p.progressRecords?.find(x => x.id === rid); if (!r) return;
+        document.getElementById('progress-detail-title').textContent = r.title;
+        document.getElementById('progress-detail-content').innerHTML = r.content;
+        document.getElementById('progress-detail-modal').classList.add('active');
+    }
+
+    formatDoc(cmd) { document.execCommand(cmd, false, null); document.getElementById('progress-content').focus(); }
+    insertLink() { const u = prompt('请输入链接地址:', 'https://'); if (u) document.execCommand('createLink', false, u); }
+    insertImage() { const u = prompt('请输入图片地址:', 'https://'); if (u) { document.execCommand('insertImage', false, u); setTimeout(() => this.initImageResize(), 100); } }
+    initImageResize() {
+        const ed = document.getElementById('progress-content'); if (!ed) return;
+        let rz = false, img = null, sx, sw;
+        ed.addEventListener('click', e => { if (e.target.tagName === 'IMG') { img = e.target; ed.querySelectorAll('img').forEach(i => i.classList.remove('resizing')); img.classList.add('resizing'); e.stopPropagation(); } else { ed.querySelectorAll('img').forEach(i => i.classList.remove('resizing')); img = null; } });
+        ed.addEventListener('mousedown', e => { if (e.target.tagName === 'IMG') { const rc = e.target.getBoundingClientRect(); if (e.clientX > rc.right - 10 && e.clientY > rc.bottom - 10) { rz = true; img = e.target; sx = e.clientX; sw = parseInt(getComputedStyle(img).width, 10); e.preventDefault(); } } });
+        document.addEventListener('mousemove', e => { if (!rz || !img) return; const w = sw + (e.clientX - sx); if (w > 50) { img.style.width = w + 'px'; img.style.height = 'auto'; } });
+        document.addEventListener('mouseup', () => { rz = false; });
+    }
+
+    filterProjects() { this.render(); }
+    clearFilters() { document.getElementById('filter-name').value = ''; document.getElementById('filter-owner').value = ''; document.getElementById('filter-status').value = ''; this.render(); }
+    getFilteredProjects() {
+        const nf = document.getElementById('filter-name').value.toLowerCase();
+        const of = document.getElementById('filter-owner').value.toLowerCase();
+        const sf = document.getElementById('filter-status').value;
+        return this.projects.filter(p => !p.archived && p.name.toLowerCase().includes(nf) && (!of || (p.owner && p.owner.toLowerCase().includes(of))) && (!sf || p.status === sf)).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    }
+
+    viewDetails(id) {
+        const p = this.projects.find(x => x.id === id); if (!p) return;
+        let ms = '', pr = '';
+        if (p.milestones?.length) ms = '<div class="detail-section"><div class="detail-section-title">里程碑 (' + p.milestones.length + '个)</div>' + p.milestones.map(m => '<div style="background:#FAF7F0;padding:12px;border-radius:8px;margin-bottom:8px"><strong>' + m.name + '</strong> - ' + m.status + ' (' + m.progress + '%)<div style="font-size:13px;color:#8B8680">' + m.startDate + ' 至 ' + m.endDate + '</div></div>').join('') + '</div>';
+        if (p.progressRecords?.length) { const s = [...p.progressRecords].sort((a, b) => b.createdAt - a.createdAt); pr = '<div class="detail-section"><div class="detail-section-title">进展记录 (' + p.progressRecords.length + '条)</div>' + s.map(r => '<div style="background:#FAF7F0;padding:16px;border-radius:8px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><strong>' + r.title + '</strong><span style="font-size:12px;color:#8B8680">' + new Date(r.createdAt).toLocaleString('zh-CN') + '</span></div><div>' + r.content + '</div></div>').join('') + '</div>'; }
+        document.getElementById('detail-content').innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px"><div><div style="font-size:12px;color:#8B8680">项目名称</div><div style="font-weight:600">' + p.name + '</div></div><div><div style="font-size:12px;color:#8B8680">负责人</div><div>' + (p.owner || '未指定') + '</div></div><div><div style="font-size:12px;color:#8B8680">项目状态</div><div>' + p.status + '</div></div><div><div style="font-size:12px;color:#8B8680">项目进度</div><div>' + (p.projectProgress || 0) + '%</div></div></div>' + ms + pr;
+        document.getElementById('detail-modal').classList.add('active');
+    }
+
+    exportExcel() {
+        try {
+            if (!this.projects.length) { this.showToast('暂无数据可导出'); return; }
+            const wb = XLSX.utils.book_new();
+            const pd = this.projects.map(p => ({ '项目ID': p.id, '项目名称': p.name, '负责人': p.owner || '', '开始时间': p.startDate, '结束时间': p.endDate, '项目状态': p.status, '项目进度': p.projectProgress || 0, '团队成员': p.members || '', '项目描述': p.description || '', '是否归档': p.archived ? '是' : '否', '创建时间': new Date(p.createdAt).toLocaleString('zh-CN') }));
+            const ws1 = XLSX.utils.json_to_sheet(pd); ws1['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 30 }, { wch: 8 }, { wch: 20 }];
+            XLSX.utils.book_append_sheet(wb, ws1, '项目列表');
+            let mss = []; this.projects.forEach(p => { p.milestones?.forEach(m => { mss.push({ '所属项目': p.name, '里程碑名称': m.name, '开始时间': m.startDate, '结束时间': m.endDate, '状态': m.status, '进度': m.progress }); }); });
+            if (mss.length) { const ws2 = XLSX.utils.json_to_sheet(mss); ws2['!cols'] = [{ wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 8 }]; XLSX.utils.book_append_sheet(wb, ws2, '里程碑明细'); }
+            let prs = []; this.projects.forEach(p => { p.progressRecords?.forEach(r => { prs.push({ '所属项目': p.name, '标题': r.title, '内容(HTML)': r.content, '创建时间': new Date(r.createdAt).toLocaleString('zh-CN') }); }); });
+            if (prs.length) { const ws3 = XLSX.utils.json_to_sheet(prs); ws3['!cols'] = [{ wch: 20 }, { wch: 25 }, { wch: 60 }, { wch: 20 }]; XLSX.utils.book_append_sheet(wb, ws3, '进展记录明细'); }
+            XLSX.writeFile(wb, '运营部项目数据_' + new Date().toLocaleDateString('zh-CN') + '.xlsx');
+            this.showToast('Excel 导出成功');
+        } catch (e) { this.showToast('导出失败：' + e.message); }
+    }
+
+    importExcel(input) {
+        const file = input.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                const ps = wb.Sheets['项目列表'];
+                if (!ps) { this.showToast('未找到「项目列表」工作表'); return; }
+                const json = XLSX.utils.sheet_to_json(ps);
+                if (!json.length) { this.showToast('Excel 文件为空'); return; }
+                if (confirm('检测到 ' + json.length + ' 个项目，是否导入？这将覆盖所有数据。')) {
+                    const updates = {};
+                    this.projects.forEach(p => { updates[p.id] = null; });
+                    json.forEach(row => {
+                        const id = row['项目ID'] || Date.now().toString() + Math.random().toString(36).substr(2, 4);
+                        updates[id] = { id, name: row['项目名称'], owner: row['负责人'] || '', startDate: row['开始时间'], endDate: row['结束时间'], status: row['项目状态'] || '未启动', projectProgress: row['项目进度'] || 0, members: row['团队成员'] || '', description: row['项目描述'] || '', milestones: [], progressRecords: [], archived: row['是否归档'] === '是', createdAt: Date.now(), sortOrder: Date.now() };
+                    });
+                    const msSheet = wb.Sheets['里程碑明细'];
+                    if (msSheet) { XLSX.utils.sheet_to_json(msSheet).forEach(m => { const proj = Object.values(updates).find(p => p && p.name === m['所属项目']); if (proj) proj.milestones.push({ id: Date.now().toString(), name: m['里程碑名称'], startDate: m['开始时间'], endDate: m['结束时间'], status: m['状态'], progress: m['进度'] || 0 }); }); }
+                    await this.db.batchUpdate(updates);
+                    this.showToast('成功导入 ' + json.length + ' 个项目');
+                }
+            } catch (e) { this.showToast('导入失败：' + e.message); }
+            input.value = '';
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    exportPNG() {
+        html2canvas(document.getElementById('capture-area'), { scale: 2, backgroundColor: '#F5F1E8', useCORS: true }).then(c => { const a = document.createElement('a'); a.download = '运营部项目看板.png'; a.href = c.toDataURL(); a.click(); this.showToast('PNG 导出成功'); }).catch(() => this.showToast('导出失败'));
+    }
+
+    renderProgressPreview(p) {
+        if (!p.progressRecords?.length) return '<div class="no-progress-tip">暂无进展记录</div>';
+        const s = [...p.progressRecords].sort((a, b) => b.createdAt - a.createdAt).slice(0, 2);
+        return '<div class="progress-preview-list">' + s.map(r => '<div class="progress-preview-item" onclick="app.viewProgressDetail(\'' + p.id + '\',\'' + r.id + '\')"><div class="progress-preview-header"><span class="progress-preview-title">' + r.title + '</span><span class="progress-preview-date">' + new Date(r.createdAt).toLocaleDateString('zh-CN') + '</span></div><div class="progress-preview-content">' + r.content.replace(/<[^>]*>/g, '').substring(0, 60) + '...</div><div class="progress-preview-hint">点击查看完整内容</div></div>').join('') + (p.progressRecords.length > 2 ? '<div style="text-align:center;font-size:12px;color:#999">还有 ' + (p.progressRecords.length - 2) + ' 条...</div>' : '') + '</div>';
+    }
+
+    renderMilestonesGrid(ms) {
+        if (!ms?.length) return '<div style="color:#999;font-size:13px">暂无里程碑</div>';
+        return '<div class="milestones-grid-5">' + ms.map(m => {
+            const od = new Date(m.endDate) < new Date() && m.status !== '已完成';
+            const c2 = od ? 'milestone-status-overdue' : m.status === '已完成' ? 'milestone-status-completed' : m.status === '进行中' ? 'milestone-status-progress' : 'milestone-status-pending';
+            return '<div class="milestone-card-small"><div class="milestone-card-name">' + m.name + '</div><div class="milestone-card-date">' + m.startDate.slice(5) + ' 至 ' + m.endDate.slice(5) + '</div><div class="milestone-card-bar"><div class="milestone-card-fill" style="width:' + m.progress + '%;background:' + (m.status === '已完成' ? '#B8D4C8' : '#E6C9A8') + '"></div></div><span class="milestone-card-status ' + c2 + '">' + (od ? '逾期' : m.status) + '</span></div>';
+        }).join('') + '</div>';
+    }
+
+    renderProjectCard(p, i, total) {
+        const sc = { '未启动': 'status-pending', '进行中': 'status-progress', '已完成': 'status-completed' }[p.status] || 'status-pending';
+        return '<div class="project-card"><div class="project-card-layout"><div class="project-main"><div class="project-header"><div><div class="project-title">' + p.name + '</div><div class="project-meta"><span>📅 ' + p.startDate + ' 至 ' + p.endDate + '</span>' + (p.owner ? '<span>👤 ' + p.owner + '</span>' : '') + '</div></div><select class="project-status ' + sc + '" onchange="app.changeStatus(\'' + p.id + '\',this.value)"><option value="未启动"' + (p.status === '未启动' ? ' selected' : '') + '>未启动</option><option value="进行中"' + (p.status === '进行中' ? ' selected' : '') + '>进行中</option><option value="已完成"' + (p.status === '已完成' ? ' selected' : '') + '>已完成</option></select></div>' + (p.description ? '<div class="project-description">' + p.description + '</div>' : '') + '<div class="project-progress-section"><div class="progress-header"><span>📊 项目进度</span><span>' + (p.projectProgress || 0) + '%</span></div><div class="progress-bar"><div class="progress-fill" style="width:' + (p.projectProgress || 0) + '%"></div></div></div><div class="milestones-section"><div class="section-subtitle">里程碑 (' + (p.milestones?.length || 0) + '个)</div>' + this.renderMilestonesGrid(p.milestones) + '</div><div class="project-footer"><div class="project-btns"><button class="btn btn-secondary btn-sm" onclick="app.openProgressModal(\'' + p.id + '\')">📝 记录进展</button><button class="btn btn-secondary btn-sm" onclick="app.viewDetails(\'' + p.id + '\')">👁️ 详情</button><button class="btn btn-secondary btn-sm" onclick="app.openProjectModal(\'' + p.id + '\')">✏️ 编辑</button><button class="btn btn-danger btn-sm" onclick="app.deleteProject(\'' + p.id + '\')">🗑️ 删除</button></div><div class="sort-btns"><button class="btn-sort" onclick="app.moveProject(\'' + p.id + '\',\'up\')"' + (i === 0 ? ' disabled' : '') + '>↑</button><button class="btn-sort" onclick="app.moveProject(\'' + p.id + '\',\'down\')"' + (i === total - 1 ? ' disabled' : '') + '>↓</button><button class="btn btn-secondary btn-sm" onclick="app.archiveProject(\'' + p.id + '\')" style="margin-left:8px">📦 归档</button></div></div></div><div class="project-side"><div class="progress-preview-section"><div class="section-subtitle">最新进展</div>' + this.renderProgressPreview(p) + '</div></div></div></div>';
+    }
+
+    renderArchivedCard(p) {
+        return '<div class="project-card archived" style="padding:20px"><div class="project-header" style="margin-bottom:12px"><div><div class="project-title" style="font-size:16px">' + p.name + '</div><div class="project-meta">' + p.startDate + ' 至 ' + p.endDate + '</div></div><span class="project-status status-archived">已归档</span></div><div style="font-size:12px;color:#8B8680;margin-bottom:12px">进度:' + (p.projectProgress || 0) + '% | 里程碑:' + (p.milestones?.length || 0) + '个 | 进展:' + (p.progressRecords?.length || 0) + '条</div><div class="project-footer" style="padding-top:12px"><button class="btn btn-secondary btn-sm" onclick="app.viewDetails(\'' + p.id + '\')">👁️ 查看</button><button class="btn btn-success btn-sm" onclick="app.unarchiveProject(\'' + p.id + '\')">↩️ 恢复</button></div></div>';
+    }
+
+    render() {
+        const ac = document.getElementById('active-projects');
+        const arc = document.getElementById('archived-projects');
+        const filtered = this.getFilteredProjects();
+        const archived = this.projects.filter(p => p.archived);
+        document.getElementById('empty-active').style.display = filtered.length ? 'none' : 'block';
+        document.getElementById('empty-archived').style.display = archived.length ? 'none' : 'block';
+        ac.innerHTML = filtered.map((p, i) => this.renderProjectCard(p, i, filtered.length)).join('');
+        arc.innerHTML = archived.map(p => this.renderArchivedCard(p)).join('');
+    }
+}
+
+const app = new ProjectManager();
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active')); });
+
+</body>
+</html>
