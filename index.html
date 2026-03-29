@@ -1038,6 +1038,7 @@
             text-align: center;
         }
     </style>
+    <script src="config.js"></script>
 </head>
 <body>
     <div class="container" id="capture-area">
@@ -1322,11 +1323,11 @@
 
     // ====== GitHub 配置（部署前必须替换）======
 const GITHUB_CONFIG = {
-    token:  'YOUR_GITHUB_TOKEN',   // GitHub Personal Access Token (需 repo 权限)
-    owner:  'tiantiger',           // 你的 GitHub 用户名
-    repo:   'ops-pm-tool',        // 仓库名
-    branch: 'main',               // 分支名
-    file:   'data.json'           // 数据文件名
+    token: (typeof window.GITHUB_TOKEN !== 'undefined') ? window.GITHUB_TOKEN : '',
+    owner:  'tiantiger',
+    repo:   'ops-pm-tool',
+    branch: 'main',
+    file:   'data.json'
 };
 
 // ====== GitHub 数据层 ======
